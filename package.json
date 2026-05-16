@@ -1,0 +1,17 @@
+{
+  "name": "ai-teacher",
+  "private": true,
+  "scripts": {
+    "dev": "corepack pnpm --parallel dev",
+    "build": "corepack pnpm -r build",
+    "test": "corepack pnpm -r test",
+    "lint": "corepack pnpm -r lint",
+    "db:generate": "corepack pnpm --filter @ai-teacher/api prisma generate",
+    "db:migrate": "corepack pnpm --filter @ai-teacher/api prisma migrate dev"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "typescript": "^5.8.0"
+  },
+  "packageManager": "pnpm@10.0.0"
+}

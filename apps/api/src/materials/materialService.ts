@@ -1,0 +1,328 @@
+import type { AiProvider, ScoreResult } from '@ai-teacher/shared';
+import type { AiErrorLogInput } from '../ai/aiErrorLogger';
+import { logAiError } from '../ai/aiErrorLogger';
+import { aiTeachingService } from '../ai/aiTeachingService';
+import { prisma } from '../db/prisma';
+import { determineChunkStatus, determineMaterialStatus } from '../lessons/lessonService';
+import { normalizeScoreResult } from '../scoring/rubric';
+import { chunkText } from './chunker';
+
+function words(value: string) {
+  return Array.from(new Set(value.toLowerCase().match(/[a-z0-9']+/g) ?? [])).filter((word) => word.length > 3);
+}
+
+export function scoreParaphraseForText(reference: string, transcript: string, threshold: number) {
+  const referenceWords = words(reference);
+  const transcriptWords = words(transcript);
+  const transcriptSet = new Set(transcriptWords);
+  const understood = referenceWords.filter((word) => transcriptSet.has(word));
+  const missed = referenceWords.filter((word) => !transcriptSet.has(word));
+  const score = referenceWords.length === 0 ? 0 : Math.round((understood.length / referenceWords.length) * 100);
+
+  return normalizeScoreResult({
+    score,
+    passed: false,
+    rubric: {
+      mainIdea: score,
+      keyDetails: score,
+      context: Math.min(100, score + 5),
+      whyItMatters: Math.min(100, score + 5),
+      accuracy: score
+    },
+    understood: understood.slice(0, 6),
+    missed: missed.slice(0, 6),
+    feedback: score >= threshold
+      ? 'Good understanding. You covered the important ideas clearly enough to move on.'
+      : `You are close, but add these important ideas: ${missed.slice(0, 6).join(', ') || 'more key details from the text'}.`
+  }, threshold);
+}
+
+type ScoringProvider = 'qwen' | 'deepseek' | 'openai';
+
+interface AiScoringService {
+  scoreParaphrase(input: { provider: ScoringProvider; referenceText: string; transcript: string; threshold: number }): Promise<ScoreResult>;
+}
+
+interface AiChunkingService {
+  suggestReadingPartCount(input: { provider: AiProvider; text: string }): Promise<number>;
+}
+
+export async function scoreParaphraseWithAi(input: {
+  referenceText: string;
+  transcript: string;
+  threshold: number;
+  provider?: ScoringProvider;
+  fallbackProvider?: ScoringProvider;
+  service?: AiScoringService;
+  logError?: (input: AiErrorLogInput) => Promise<void> | void;
+}) {
+  const service = input.service ?? aiTeachingService;
+  const logger = input.logError ?? logAiError;
+  const provider = input.provider ?? 'qwen';
+  const fallback = input.fallbackProvider ?? 'openai';
+
+  try {
+    return await service.scoreParaphrase({ provider, referenceText: input.referenceText, transcript: input.transcript, threshold: input.threshold });
+  } catch (primaryError) {
+    await logger({ task: 'scoring paraphrase', provider, error: primaryError });
+    if (fallback === provider) throw primaryError;
+    try {
+      return await service.scoreParaphrase({ provider: fallback, referenceText: input.referenceText, transcript: input.transcript, threshold: input.threshold });
+    } catch (fallbackError) {
+      await logger({ task: 'scoring paraphrase', provider: fallback, error: fallbackError });
+      throw fallbackError;
+    }
+  }
+}
+
+export async function suggestReadingPartCount(input: {
+  text: string;
+  provider?: AiProvider;
+  service?: AiChunkingService;
+}) {
+  const deterministicCount = chunkText(input.text).length;
+  const provider = input.provider ?? 'qwen';
+  const service = input.service ?? aiTeachingService;
+
+  try {
+    const aiCount = await service.suggestReadingPartCount({ provider, text: input.text });
+    if (Number.isFinite(aiCount) && aiCount > 0) {
+      const cappedAiCount = Math.max(1, Math.min(Math.round(aiCount), Math.max(1, countSentencesForCap(input.text))));
+      return Math.max(deterministicCount, cappedAiCount);
+    }
+  } catch {
+    return deterministicCount;
+  }
+
+  return deterministicCount;
+}
+
+function countSentencesForCap(text: string) {
+  return Math.max(1, text.replace(/\s+/g, ' ').trim().match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.length ?? 1);
+}
+
+export const materialService = {
+  async createMaterial(input: { studentProfileId: string; title: string; originalText: string; readingPartCount?: number }) {
+    const chunks = chunkText(input.originalText, { readingPartCount: input.readingPartCount });
+
+    return prisma.material.create({
+      data: {
+        studentProfileId: input.studentProfileId,
+        title: input.title,
+        originalText: input.originalText,
+        chunks: {
+          create: chunks.map((chunk) => ({ index: chunk.index, text: chunk.text }))
+        }
+      },
+      include: { chunks: { orderBy: { index: 'asc' } } }
+    });
+  },
+
+  async listMaterials(studentProfileId: string) {
+    return prisma.material.findMany({
+      where: { studentProfileId },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        finalBestScore: true
+      }
+    });
+  },
+
+  async getMaterial(materialId: string) {
+    return prisma.material.findUnique({
+      where: { id: materialId },
+      include: { chunks: { orderBy: { index: 'asc' } } }
+    });
+  },
+
+  async updateMaterial(input: { materialId: string; title: string; originalText: string }) {
+    const material = await prisma.material.findUnique({
+      where: { id: input.materialId },
+      include: { chunks: true }
+    });
+
+    if (!material) {
+      throw new Error('Material not found');
+    }
+
+    const chunks = chunkText(input.originalText);
+    await prisma.$transaction(async (transaction) => {
+      await transaction.paraphraseAttempt.deleteMany({ where: { materialId: material.id } });
+      await transaction.materialChunk.deleteMany({ where: { materialId: material.id } });
+      await transaction.material.update({
+        where: { id: material.id },
+        data: {
+          title: input.title,
+          originalText: input.originalText,
+          status: 'notStarted',
+          finalBestScore: null,
+          chunks: {
+            create: chunks.map((chunk) => ({ index: chunk.index, text: chunk.text }))
+          }
+        }
+      });
+    });
+
+    return prisma.material.findUniqueOrThrow({
+      where: { id: material.id },
+      include: { chunks: { orderBy: { index: 'asc' } } }
+    });
+  },
+
+  async deleteMaterial(materialId: string) {
+    await prisma.$transaction(async (transaction) => {
+      await transaction.paraphraseAttempt.deleteMany({ where: { materialId } });
+      await transaction.materialChunk.deleteMany({ where: { materialId } });
+      await transaction.material.delete({ where: { id: materialId } });
+    });
+  },
+
+  async updateReadingParts(input: { materialId: string; readingPartCount: number }) {
+    const material = await prisma.material.findUnique({
+      where: { id: input.materialId },
+      include: { chunks: { orderBy: { index: 'asc' } } }
+    });
+
+    if (!material) {
+      throw new Error('Material not found');
+    }
+
+    const nextChunks = chunkText(material.originalText, { readingPartCount: input.readingPartCount });
+    const existingByIndex = new Map(material.chunks.map((chunk) => [chunk.index, chunk]));
+    const nextIndexes = new Set(nextChunks.map((chunk) => chunk.index));
+    const extraChunks = material.chunks.filter((chunk) => !nextIndexes.has(chunk.index));
+
+    if (extraChunks.length > 0) {
+      await prisma.paraphraseAttempt.updateMany({
+        where: { chunkId: { in: extraChunks.map((chunk) => chunk.id) } },
+        data: { chunkId: null }
+      });
+      await prisma.materialChunk.deleteMany({
+        where: { id: { in: extraChunks.map((chunk) => chunk.id) } }
+      });
+    }
+
+    for (const chunk of nextChunks) {
+      const existing = existingByIndex.get(chunk.index);
+      if (existing) {
+        await prisma.materialChunk.update({
+          where: { id: existing.id },
+          data: { text: chunk.text, status: 'notStarted', bestScore: null }
+        });
+      } else {
+        await prisma.materialChunk.create({
+          data: { materialId: material.id, index: chunk.index, text: chunk.text }
+        });
+      }
+    }
+
+    await prisma.material.update({
+      where: { id: material.id },
+      data: { status: 'notStarted', finalBestScore: null }
+    });
+
+    return prisma.material.findUniqueOrThrow({
+      where: { id: material.id },
+      include: { chunks: { orderBy: { index: 'asc' } } }
+    });
+  },
+
+  async suggestReadingParts(materialId: string, provider: AiProvider = 'qwen') {
+    const material = await prisma.material.findUnique({ where: { id: materialId } });
+    if (!material) {
+      throw new Error('Material not found');
+    }
+
+    return { readingPartCount: await suggestReadingPartCount({ text: material.originalText, provider }) };
+  },
+
+  async submitParaphraseAttempt(input: { materialId: string; scope: 'chunk' | 'final'; chunkId?: string; transcript: string }) {
+    const material = await prisma.material.findUnique({
+      where: { id: input.materialId },
+      include: {
+        chunks: { orderBy: { index: 'asc' } },
+        studentProfile: { include: { routingPreferences: true } }
+      }
+    });
+
+    if (!material) {
+      throw new Error('Material not found');
+    }
+
+    const chunk = input.scope === 'chunk'
+      ? material.chunks.find((candidate) => candidate.id === input.chunkId)
+      : null;
+
+    if (input.scope === 'chunk' && !chunk) {
+      throw new Error('Chunk not found');
+    }
+
+    const threshold = input.scope === 'chunk'
+      ? material.studentProfile.chunkMasteryThreshold
+      : material.studentProfile.finalSummaryMasteryThreshold;
+    const referenceText = chunk?.text ?? material.originalText;
+
+    const scoringCapability = input.scope === 'chunk' ? 'scoreChunkParaphrase' : 'scoreFinalSummary';
+    const routingPref = material.studentProfile.routingPreferences.find((p) => p.capability === scoringCapability);
+    const fallbackPref = material.studentProfile.routingPreferences.find((p) => p.capability === 'fallback');
+    const SCORING_PROVIDERS: ScoringProvider[] = ['qwen', 'deepseek', 'openai'];
+    const scoringProvider: ScoringProvider = SCORING_PROVIDERS.includes(routingPref?.provider as ScoringProvider)
+      ? routingPref!.provider as ScoringProvider
+      : 'qwen';
+    const fallbackProvider: ScoringProvider = SCORING_PROVIDERS.includes(fallbackPref?.provider as ScoringProvider)
+      ? fallbackPref!.provider as ScoringProvider
+      : 'openai';
+
+    const result = await scoreParaphraseWithAi({
+      referenceText,
+      transcript: input.transcript,
+      threshold,
+      provider: scoringProvider,
+      fallbackProvider
+    });
+
+    await prisma.paraphraseAttempt.create({
+      data: {
+        materialId: input.materialId,
+        chunkId: chunk?.id,
+        scope: input.scope,
+        transcript: input.transcript,
+        score: result.score,
+        passed: result.passed,
+        rubricJson: JSON.stringify(result.rubric),
+        feedback: result.feedback
+      }
+    });
+
+    if (chunk) {
+      await prisma.materialChunk.update({
+        where: { id: chunk.id },
+        data: {
+          bestScore: Math.max(chunk.bestScore ?? 0, result.score),
+          status: determineChunkStatus(Math.max(chunk.bestScore ?? 0, result.score), threshold)
+        }
+      });
+    } else {
+      await prisma.material.update({
+        where: { id: material.id },
+        data: { finalBestScore: Math.max(material.finalBestScore ?? 0, result.score) }
+      });
+    }
+
+    const refreshed = await prisma.material.findUniqueOrThrow({
+      where: { id: material.id },
+      include: { chunks: true }
+    });
+    const nextStatus = determineMaterialStatus({
+      chunkStatuses: refreshed.chunks.map((candidate) => candidate.status as 'notStarted' | 'inProgress' | 'mastered'),
+      finalScore: refreshed.finalBestScore,
+      finalThreshold: material.studentProfile.finalSummaryMasteryThreshold
+    });
+    await prisma.material.update({ where: { id: material.id }, data: { status: nextStatus } });
+
+    return result;
+  }
+};

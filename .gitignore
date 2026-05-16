@@ -1,0 +1,15 @@
+.claude
+node_modules
+.env
+.env.*
+!.env.example
+apps/api/prisma/dev.db
+apps/api/dev.db
+apps/api/prisma/dev.db-journal
+dist
+coverage
+.superpowers
+tsconfig.tsbuildinfo
+logs
+apps/api/logs
+
