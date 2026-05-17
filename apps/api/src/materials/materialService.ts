@@ -239,7 +239,7 @@ export const materialService = {
     return { readingPartCount: await suggestReadingPartCount({ text: material.originalText, provider }) };
   },
 
-  async submitParaphraseAttempt(input: { materialId: string; scope: 'chunk' | 'final'; chunkId?: string; transcript: string }) {
+  async submitParaphraseAttempt(input: { materialId: string; scope: 'chunk' | 'final'; chunkId?: string; transcript: string; referenceText?: string }) {
     const material = await prisma.material.findUnique({
       where: { id: input.materialId },
       include: {
@@ -263,7 +263,7 @@ export const materialService = {
     const threshold = input.scope === 'chunk'
       ? material.userProfile.chunkMasteryThreshold
       : material.userProfile.finalSummaryMasteryThreshold;
-    const referenceText = chunk?.text ?? material.originalText;
+    const referenceText = input.referenceText ?? chunk?.text ?? material.originalText;
 
     const scoringCapability = input.scope === 'chunk' ? 'scoreChunkParaphrase' : 'scoreFinalSummary';
     const routingPref = material.userProfile.routingPreferences.find((p) => p.capability === scoringCapability);

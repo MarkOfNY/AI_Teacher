@@ -93,7 +93,8 @@ const UpdateMaterialSchema = z.object({
 const SubmitAttemptSchema = z.object({
   scope: z.enum(['chunk', 'final']),
   chunkId: z.string().min(1).optional(),
-  transcript: z.string().min(1)
+  transcript: z.string().min(1),
+  referenceText: z.string().optional()
 });
 
 const UpdateReadingPartsSchema = z.object({

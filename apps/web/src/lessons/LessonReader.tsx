@@ -50,7 +50,7 @@ interface LessonReaderProps {
   isSubmittingFinal?: boolean;
   readingPartCount?: number;
   sentenceCount?: number;
-  onSubmitParaphrase?: (input: { chunkId: string; transcript: string }) => void;
+  onSubmitParaphrase?: (input: { chunkId: string; transcript: string; referenceText: string }) => void;
   onSubmitFinalSummary?: (transcript: string) => void;
   onChangeReadingPartCount?: (readingPartCount: number) => void;
   onSuggestReadingParts?: () => void;
@@ -797,7 +797,7 @@ export function LessonReader({
                         type="button"
                         className="primary-button"
                         disabled={!transcript.trim() || isSubmitting}
-                        onClick={() => onSubmitParaphrase?.({ chunkId: chunk.id, transcript })}
+                        onClick={() => onSubmitParaphrase?.({ chunkId: chunk.id, transcript, referenceText: visibleText })}
                       >
                         Submit Test
                       </button>

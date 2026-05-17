@@ -339,7 +339,7 @@ export function App() {
     setStatusMessage(null);
   }, []);
 
-  async function handleSubmitParaphrase(input: { chunkId: string; transcript: string }) {
+  async function handleSubmitParaphrase(input: { chunkId: string; transcript: string; referenceText: string }) {
     if (!selectedMaterial) {
       return;
     }
@@ -350,7 +350,8 @@ export function App() {
         materialId: selectedMaterial.id,
         chunkId: input.chunkId,
         scope: 'chunk',
-        transcript: input.transcript
+        transcript: input.transcript,
+        referenceText: input.referenceText
       });
       setScore(result);
       const refreshed = await getMaterial(selectedMaterial.id);

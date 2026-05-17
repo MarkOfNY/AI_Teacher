@@ -50,6 +50,7 @@ export interface SubmitParaphraseAttemptRequest {
   scope: 'chunk' | 'final';
   chunkId?: string;
   transcript: string;
+  referenceText?: string;
 }
 
 export interface ScoreResponse {
@@ -152,7 +153,8 @@ export async function submitParaphraseAttempt(input: SubmitParaphraseAttemptRequ
     body: JSON.stringify({
       chunkId: input.chunkId,
       scope: input.scope,
-      transcript: input.transcript
+      transcript: input.transcript,
+      referenceText: input.referenceText
     })
   });
 
