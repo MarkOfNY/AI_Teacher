@@ -1,7 +1,7 @@
 import * as path from 'path';
 import { test, expect } from '@playwright/test';
 
-const BASE = 'http://127.0.0.1:5173';
+const BASE = 'http://localhost:5173';
 
 // Real PDF from pdf-parse test suite — known to contain readable text
 const SAMPLE_PDF = path.join(
@@ -11,7 +11,7 @@ const SAMPLE_PDF = path.join(
 
 test.describe('File upload', () => {
   test('uploading a PDF extracts text into the material textarea', async ({ page }) => {
-    await page.goto(`${BASE}?qaSession=parent`);
+    await page.goto(`${BASE}?qaSession=true`);
     await page.getByRole('tab', { name: 'Manage Lessons' }).click();
 
     const fileInput = page.locator('input[type="file"]');
@@ -26,7 +26,7 @@ test.describe('File upload', () => {
   });
 
   test('title field is populated from the filename after PDF upload', async ({ page }) => {
-    await page.goto(`${BASE}?qaSession=parent`);
+    await page.goto(`${BASE}?qaSession=true`);
     await page.getByRole('tab', { name: 'Manage Lessons' }).click();
 
     const fileInput = page.locator('input[type="file"]');
@@ -41,7 +41,7 @@ test.describe('File upload', () => {
   });
 
   test('error shown for corrupt PDF', async ({ page }) => {
-    await page.goto(`${BASE}?qaSession=parent`);
+    await page.goto(`${BASE}?qaSession=true`);
     await page.getByRole('tab', { name: 'Manage Lessons' }).click();
 
     const fileInput = page.locator('input[type="file"]');

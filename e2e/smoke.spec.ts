@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { test, expect } from '@playwright/test';
 
-const BASE = 'http://127.0.0.1:5173';
+const BASE = 'http://localhost:5173';
 const API = 'http://localhost:3001';
 
 // Minimal valid 8x8 PNG (white pixels, no text — used to verify the zone accepts images
@@ -21,7 +21,7 @@ test.describe('AI Teacher smoke tests', () => {
   });
 
   test('dev session auto-login via qaSession param', async ({ page }) => {
-    await page.goto(`${BASE}?qaSession=parent`);
+    await page.goto(`${BASE}?qaSession=true`);
     await expect(page.getByRole('heading', { name: 'AI Teacher' })).toBeVisible();
     // Should show the tabbed workspace, not the login panel
     await expect(page.getByRole('tab', { name: 'Take Lesson' })).toBeVisible();
@@ -30,13 +30,13 @@ test.describe('AI Teacher smoke tests', () => {
   });
 
   test('Manage Lessons tab shows material editor', async ({ page }) => {
-    await page.goto(`${BASE}?qaSession=parent`);
+    await page.goto(`${BASE}?qaSession=true`);
     await page.getByRole('tab', { name: 'Manage Lessons' }).click();
     await expect(page.getByRole('heading', { name: /lesson/i })).toBeVisible();
   });
 
   test('Settings tab shows mastery thresholds and AI routing', async ({ page }) => {
-    await page.goto(`${BASE}?qaSession=parent`);
+    await page.goto(`${BASE}?qaSession=true`);
     await page.getByRole('tab', { name: 'Settings' }).click();
     await expect(page.getByRole('heading', { name: 'Mastery Thresholds' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'AI Provider Routing' })).toBeVisible();
@@ -48,7 +48,7 @@ test.describe('AI Teacher smoke tests', () => {
   });
 
   test('upload zone is present on Manage Lessons tab', async ({ page }) => {
-    await page.goto(`${BASE}?qaSession=parent`);
+    await page.goto(`${BASE}?qaSession=true`);
     await page.getByRole('tab', { name: 'Manage Lessons' }).click();
     const zone = page.getByRole('button', { name: /upload file/i });
     await expect(zone).toBeVisible();
@@ -60,7 +60,7 @@ test.describe('AI Teacher smoke tests', () => {
     const tmpFile = path.join(os.tmpdir(), 'test-unsupported.xyz');
     fs.writeFileSync(tmpFile, 'some content');
 
-    await page.goto(`${BASE}?qaSession=parent`);
+    await page.goto(`${BASE}?qaSession=true`);
     await page.getByRole('tab', { name: 'Manage Lessons' }).click();
     const fileInput = page.locator('input[type="file"]');
     await fileInput.setInputFiles({ name: 'test.xyz', mimeType: 'application/octet-stream', buffer: Buffer.from('hello') });
@@ -79,7 +79,7 @@ test.describe('AI Teacher smoke tests', () => {
 
   test('can create and select a lesson', async ({ page, request }) => {
     const title = `E2E Lesson ${Date.now()}`;
-    await page.goto(`${BASE}?qaSession=parent`);
+    await page.goto(`${BASE}?qaSession=true`);
     await page.getByRole('tab', { name: 'Manage Lessons' }).click();
     await page.getByLabel(/title/i).fill(title);
     await page.getByLabel(/material text/i).fill(
@@ -98,8 +98,8 @@ test.describe('AI Teacher smoke tests', () => {
     }
 
     // Also clean up any leftover E2E Lesson entries from previous runs
-    const session = await (await request.post(`${API}/dev-session`)).json() as { student: { id: string } };
-    const materials = await (await request.get(`${API}/materials?studentProfileId=${session.student.id}`)).json() as Array<{ id: string; title: string }>;
+    const session = await (await request.post(`${API}/dev-session`)).json() as { user: { id: string } };
+    const materials = await (await request.get(`${API}/materials?userProfileId=${session.user.id}`)).json() as Array<{ id: string; title: string }>;
     for (const m of materials) {
       if (m.title.startsWith('E2E Lesson ') && m.id !== materialId) {
         await request.delete(`${API}/materials/${m.id}`);
