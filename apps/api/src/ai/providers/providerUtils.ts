@@ -90,7 +90,7 @@ export function buildProviderClient(config: ProviderConfig, apiKey: string) {
       return send(`Explain the background context and why this text matters. Keep it simple.\n\n${input.text}`);
     },
     async explainGaps(input: { text: string; missed: string[] }) {
-      return send(`The student missed these ideas: ${input.missed.join(', ') || 'unknown'}. Re-explain only those gaps with simple examples.\n\nOriginal text:\n${input.text}`);
+      return send(`A student needs this concept explained in a more intuitive way. Use a concrete everyday analogy, a real-world example, or a completely fresh angle. Do not restate the original wording — make the idea click differently.\n\nText:\n${input.text}`);
     },
     async defineVocabulary(input: { term: string; contextText: string }) {
       return send(`Define the word or phrase "${input.term}" for a student. Use the surrounding text to choose the right meaning. Keep the answer short and concrete.\n\nSurrounding text:\n${input.contextText}`);

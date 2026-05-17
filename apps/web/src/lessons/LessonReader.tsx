@@ -62,7 +62,7 @@ interface LessonReaderProps {
   isReaderProcessing?: boolean;
   onSimplify?: (input: { chunkId: string; text: string; readingLevel: ReadingLevel }) => void;
   onExplainContext?: (input: { chunkId: string; text: string }) => void;
-  onExplainAgain?: (input: { text: string; missed: string[] }) => void;
+  onExplainAgain?: (input: { chunkId: string; text: string }) => void;
   onDefineVocabulary?: (input: { chunkId: string; selectedText: string; contextText: string }) => void;
   onFirstAudioCached?: () => void;
 }
@@ -739,7 +739,7 @@ export function LessonReader({
                       </div>
                     </div>
                     <p>{supportLoadingChunkId === chunk.id ? 'Thinking through this context...' : contextTexts[chunk.id] ?? 'Context will appear here in a moment.'}</p>
-                    <button type="button" className="secondary-button compact-button" onClick={() => onExplainAgain?.({ text: chunk.text, missed: [] })}>
+                    <button type="button" className="secondary-button compact-button" onClick={() => onExplainAgain?.({ chunkId: chunk.id, text: chunk.text })}>
                       Explain This Better
                     </button>
                   </div>

@@ -426,15 +426,15 @@ export function App() {
     });
   }
 
-  function handleExplainAgain(input: { text: string; missed: string[] }) {
+  function handleExplainAgain(input: { chunkId: string; text: string }) {
     void runSupportRequest({
-      chunkId: selectedMaterial?.chunks.find((chunk) => chunk.text === input.text)?.id ?? 'current',
+      chunkId: input.chunkId,
       capability: 'generateGapAwareExplanation',
       action: async (provider) => {
-        const response = await explainGaps({ text: input.text, missed: input.missed, provider });
+        const response = await explainGaps({ text: input.text, missed: [], provider });
         return response.explanation;
       },
-      onSuccess: (text) => setStatusMessage(text)
+      onSuccess: (text) => setContextTexts((currentTexts) => ({ ...currentTexts, [input.chunkId]: text }))
     });
   }
 
