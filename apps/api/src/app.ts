@@ -2,6 +2,7 @@ import cors from 'cors';
 import express from 'express';
 import type { ErrorRequestHandler } from 'express';
 import { createAiRouterRoutes } from './ai/aiRoutes';
+import { createClassroomRouter } from './classroom/classroomRoutes';
 import { createMaterialRouter } from './materials/materialRoutes';
 import { createProfileRouter } from './profile/profileRoutes';
 import { createDevSessionRouter } from './sessions/devSessionRoutes';
@@ -17,6 +18,7 @@ export function createApp() {
   });
 
   app.use('/dev-session', createDevSessionRouter());
+  app.use('/classroom', createClassroomRouter());
   app.use('/ai', createAiRouterRoutes());
   app.use('/materials', createMaterialRouter());
   app.use('/profile', createProfileRouter());

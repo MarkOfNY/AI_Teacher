@@ -515,9 +515,8 @@ export function App() {
     }
   }
 
-  if (credential) {
-    return (
-      <main className="app-shell">
+  const appContent = credential ? (
+    <main className="app-shell">
         <header className="app-header">
           <div>
             <h1>AI Teacher</h1>
@@ -662,6 +661,7 @@ export function App() {
               onCancelEdit={() => setEditingMaterial(null)}
               onCreateMaterial={(input) => void handleCreateMaterial(input)}
               onUpdateMaterial={(input) => void handleUpdateMaterial(input)}
+              showClassroomImport={Boolean(googleClientId)}
             />
             <ParentDashboard
               materials={materials}
@@ -693,19 +693,14 @@ export function App() {
           </section>
         ) : null}
       </main>
-    );
-  }
-
-  return (
+  ) : (
     <main className="login-shell">
       <section className="login-panel">
         <p className="eyebrow">Reading comprehension support</p>
         <h1>AI Teacher</h1>
         <p className="login-copy">Sign in to start lessons, track progress, and tune support settings.</p>
         {googleClientId ? (
-          <GoogleOAuthProvider clientId={googleClientId}>
-            <GoogleLoginButton onCredential={handleCredential} />
-          </GoogleOAuthProvider>
+          <GoogleLoginButton onCredential={handleCredential} />
         ) : (
           <>
             <button type="button" disabled>
@@ -719,4 +714,14 @@ export function App() {
       </section>
     </main>
   );
+
+  if (googleClientId) {
+    return (
+      <GoogleOAuthProvider clientId={googleClientId}>
+        {appContent}
+      </GoogleOAuthProvider>
+    );
+  }
+
+  return appContent;
 }

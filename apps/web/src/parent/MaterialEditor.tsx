@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { FileText, Image, Upload } from 'lucide-react';
+import { FileText, Image } from 'lucide-react';
 import { extractFile } from '../api/materialsClient';
+import { ClassroomImporter } from '../classroom/ClassroomImporter';
 
 export interface CreateMaterialInput {
   title: string;
@@ -24,6 +25,7 @@ interface MaterialEditorProps {
   onUpdateMaterial?: (input: UpdateMaterialInput) => void;
   onCancelEdit?: () => void;
   editingMaterial?: EditMaterialInput | null;
+  showClassroomImport?: boolean;
 }
 
 const ACCEPTED_MIME = new Set([
@@ -35,7 +37,7 @@ function titleFromFileName(name: string) {
   return name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ').trim();
 }
 
-export function MaterialEditor({ onCreateMaterial, onUpdateMaterial, onCancelEdit, editingMaterial = null }: MaterialEditorProps) {
+export function MaterialEditor({ onCreateMaterial, onUpdateMaterial, onCancelEdit, editingMaterial = null, showClassroomImport = false }: MaterialEditorProps) {
   const [title, setTitle] = useState('');
   const [material, setMaterial] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
@@ -136,6 +138,15 @@ export function MaterialEditor({ onCreateMaterial, onUpdateMaterial, onCancelEdi
         <h2>{isEditing ? 'Edit Lesson' : 'Create Lesson'}</h2>
         <p>{isEditing ? 'Update the lesson title or source text.' : 'Upload a document, paste a screenshot, or type the material below.'}</p>
       </div>
+
+      {showClassroomImport && !isEditing ? (
+        <ClassroomImporter
+          onImport={(input) => {
+            setTitle((current) => current || input.title);
+            setMaterial(input.text);
+          }}
+        />
+      ) : null}
 
       <label className="field">
         <span>Title</span>

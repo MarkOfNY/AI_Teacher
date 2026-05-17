@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  createDevSession,
+  createUserSession,
   createMaterial,
   deleteMaterial,
   getMaterial,
@@ -16,17 +16,17 @@ describe('materialsClient', () => {
     vi.unstubAllGlobals();
   });
 
-  it('creates a dev parent session through the API', async () => {
+  it('creates a user session through the API', async () => {
     const fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ student: { id: 'student_1', displayName: 'Student' } })
+      json: async () => ({ user: { id: 'user_1', displayName: 'Demo User' } })
     });
     vi.stubGlobal('fetch', fetch);
 
-    const session = await createDevSession();
+    const session = await createUserSession();
 
     expect(fetch).toHaveBeenCalledWith('http://localhost:3001/dev-session', { method: 'POST' });
-    expect(session.student.id).toBe('student_1');
+    expect(session.user.id).toBe('user_1');
   });
 
   it('posts pasted material in the request body instead of the URL', async () => {
@@ -42,7 +42,7 @@ describe('materialsClient', () => {
     vi.stubGlobal('fetch', fetch);
 
     const material = await createMaterial({
-      studentProfileId: 'student_1',
+      userProfileId: 'user_1',
       title: 'Declaration',
       originalText: 'A long document goes here'
     });
@@ -51,7 +51,7 @@ describe('materialsClient', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        studentProfileId: 'student_1',
+        userProfileId: 'user_1',
         title: 'Declaration',
         originalText: 'A long document goes here'
       })
@@ -120,16 +120,16 @@ describe('materialsClient', () => {
     expect(suggestion.readingPartCount).toBe(3);
   });
 
-  it('loads materials for the student workspace', async () => {
+  it('loads materials for the user workspace', async () => {
     const fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ([{ id: 'material_1', title: 'History', status: 'notStarted', finalBestScore: null }])
     });
     vi.stubGlobal('fetch', fetch);
 
-    const materials = await listMaterials('student_1');
+    const materials = await listMaterials('user_1');
 
-    expect(fetch).toHaveBeenCalledWith('http://localhost:3001/materials?studentProfileId=student_1');
+    expect(fetch).toHaveBeenCalledWith('http://localhost:3001/materials?userProfileId=user_1');
     expect(materials[0].title).toBe('History');
   });
 

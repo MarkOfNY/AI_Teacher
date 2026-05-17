@@ -1398,6 +1398,129 @@ button:disabled {
   border-color: #dce6f5;
 }
 
+/* ── Google Classroom importer ────────────────────────────────────────────── */
+
+.classroom-import-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  margin-bottom: 14px;
+  border: 1px solid #4a8f5b;
+  border-radius: 6px;
+  background: #f2f9f4;
+  color: #2d6b3f;
+  font-weight: 700;
+  padding: 0 14px;
+}
+
+.classroom-import-btn:hover {
+  background: #e6f4ea;
+  border-color: #2d6b3f;
+}
+
+.classroom-panel {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+  border: 1px solid #c5ccd6;
+  border-radius: 8px;
+  background: #fafbfc;
+  padding: 14px;
+}
+
+.classroom-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.classroom-panel-title {
+  color: #333842;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.classroom-panel-hint {
+  margin: 0;
+  color: #5f6673;
+  font-size: 13px;
+}
+
+.classroom-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #48505c;
+  font-size: 14px;
+}
+
+.classroom-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  background: none;
+  color: #2459a6;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 0;
+}
+
+.classroom-back-btn:hover {
+  text-decoration: underline;
+}
+
+.classroom-list {
+  display: grid;
+  gap: 4px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.classroom-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid #e0e5ec;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #202124;
+  font-weight: 600;
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.classroom-list-item:hover {
+  border-color: #2459a6;
+  background: #f4f7fd;
+  color: #17457d;
+}
+
+.classroom-item-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.classroom-badge {
+  flex-shrink: 0;
+  border: 1px solid #c5ccd6;
+  border-radius: 999px;
+  background: #eef1f4;
+  color: #59616d;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+}
+
 /* ── Responsive ───────────────────────────────────────────────────────────── */
 
 @media (max-width: 820px) {
