@@ -9,19 +9,15 @@ export interface MaterialChunkResponse {
   bestScore: number | null;
 }
 
-export interface DevSession {
-  parent: {
-    id: string;
-    displayName: string;
-  };
-  student: {
+export interface UserSession {
+  user: {
     id: string;
     displayName: string;
   };
 }
 
 export interface CreateMaterialRequest {
-  studentProfileId: string;
+  userProfileId: string;
   title: string;
   originalText: string;
 }
@@ -72,9 +68,9 @@ async function parseJsonResponse<T>(response: Response, fallbackMessage: string)
   return response.json() as Promise<T>;
 }
 
-export async function createDevSession() {
+export async function createUserSession() {
   const response = await fetch(`${API_BASE_URL}/dev-session`, { method: 'POST' });
-  return parseJsonResponse<DevSession>(response, 'Unable to start a development session.');
+  return parseJsonResponse<UserSession>(response, 'Unable to start a session.');
 }
 
 export async function createMaterial(input: CreateMaterialRequest) {
@@ -87,8 +83,8 @@ export async function createMaterial(input: CreateMaterialRequest) {
   return parseJsonResponse<MaterialSummaryResponse>(response, 'Unable to create material.');
 }
 
-export async function listMaterials(studentProfileId: string) {
-  const query = new URLSearchParams({ studentProfileId });
+export async function listMaterials(userProfileId: string) {
+  const query = new URLSearchParams({ userProfileId });
   const response = await fetch(`${API_BASE_URL}/materials?${query.toString()}`);
   return parseJsonResponse<MaterialSummaryResponse[]>(response, 'Unable to load materials.');
 }

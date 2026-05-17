@@ -3,13 +3,13 @@ import { DEFAULT_ROUTING_PREFERENCES, isAiCapability } from '@ai-teacher/shared'
 import { prisma } from '../db/prisma';
 
 export const profileService = {
-  async getProfile(studentProfileId: string) {
-    const profile = await prisma.studentProfile.findUnique({
-      where: { id: studentProfileId },
+  async getProfile(userProfileId: string) {
+    const profile = await prisma.userProfile.findUnique({
+      where: { id: userProfileId },
       include: { routingPreferences: true }
     });
 
-    if (!profile) throw new Error(`Student profile not found: ${studentProfileId}`);
+    if (!profile) throw new Error(`User profile not found: ${userProfileId}`);
 
     const routingPreferences: AiRoutingPreferences = { ...DEFAULT_ROUTING_PREFERENCES };
     for (const pref of profile.routingPreferences) {
@@ -26,12 +26,12 @@ export const profileService = {
   },
 
   async updateThresholds(input: {
-    studentProfileId: string;
+    userProfileId: string;
     chunkMasteryThreshold: number;
     finalSummaryMasteryThreshold: number;
   }) {
-    await prisma.studentProfile.update({
-      where: { id: input.studentProfileId },
+    await prisma.userProfile.update({
+      where: { id: input.userProfileId },
       data: {
         chunkMasteryThreshold: input.chunkMasteryThreshold,
         finalSummaryMasteryThreshold: input.finalSummaryMasteryThreshold
@@ -40,20 +40,20 @@ export const profileService = {
   },
 
   async upsertRoutingPreference(input: {
-    studentProfileId: string;
+    userProfileId: string;
     capability: AiCapability;
     provider: AiProvider;
   }) {
     await prisma.aiRoutingPreference.upsert({
       where: {
-        studentProfileId_capability: {
-          studentProfileId: input.studentProfileId,
+        userProfileId_capability: {
+          userProfileId: input.userProfileId,
           capability: input.capability
         }
       },
       update: { provider: input.provider },
       create: {
-        studentProfileId: input.studentProfileId,
+        userProfileId: input.userProfileId,
         capability: input.capability,
         provider: input.provider
       }

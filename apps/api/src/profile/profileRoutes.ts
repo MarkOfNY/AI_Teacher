@@ -16,30 +16,30 @@ const RoutingPreferenceSchema = z.object({
 export function createProfileRouter() {
   const router = Router();
 
-  router.get('/:studentProfileId', async (req, res, next) => {
+  router.get('/:userProfileId', async (req, res, next) => {
     try {
-      const profile = await profileService.getProfile(req.params.studentProfileId);
+      const profile = await profileService.getProfile(req.params.userProfileId);
       res.json(profile);
     } catch (error) {
       next(error);
     }
   });
 
-  router.patch('/:studentProfileId/thresholds', async (req, res, next) => {
+  router.patch('/:userProfileId/thresholds', async (req, res, next) => {
     try {
       const parsed = ThresholdsSchema.safeParse(req.body);
       if (!parsed.success) {
         res.status(400).json({ error: 'Invalid threshold values' });
         return;
       }
-      await profileService.updateThresholds({ studentProfileId: req.params.studentProfileId, ...parsed.data });
+      await profileService.updateThresholds({ userProfileId: req.params.userProfileId, ...parsed.data });
       res.status(204).send();
     } catch (error) {
       next(error);
     }
   });
 
-  router.put('/:studentProfileId/routing/:capability', async (req, res, next) => {
+  router.put('/:userProfileId/routing/:capability', async (req, res, next) => {
     try {
       if (!isAiCapability(req.params.capability)) {
         res.status(400).json({ error: `Unknown capability: ${req.params.capability}` });
@@ -51,7 +51,7 @@ export function createProfileRouter() {
         return;
       }
       await profileService.upsertRoutingPreference({
-        studentProfileId: req.params.studentProfileId,
+        userProfileId: req.params.userProfileId,
         capability: req.params.capability,
         provider: parsed.data.provider
       });

@@ -12,17 +12,17 @@ async function apiRequest(path: string, options?: RequestInit): Promise<Response
   return fetch(`${API_BASE_URL}${path}`, options);
 }
 
-export async function getProfile(studentProfileId: string): Promise<ProfileResponse> {
-  const response = await apiRequest(`/profile/${studentProfileId}`);
+export async function getProfile(userProfileId: string): Promise<ProfileResponse> {
+  const response = await apiRequest(`/profile/${userProfileId}`);
   if (!response.ok) throw new Error('Unable to load profile.');
   return response.json() as Promise<ProfileResponse>;
 }
 
 export async function updateThresholds(
-  studentProfileId: string,
+  userProfileId: string,
   input: { chunkMasteryThreshold: number; finalSummaryMasteryThreshold: number }
 ): Promise<void> {
-  const response = await apiRequest(`/profile/${studentProfileId}/thresholds`, {
+  const response = await apiRequest(`/profile/${userProfileId}/thresholds`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input)
@@ -31,11 +31,11 @@ export async function updateThresholds(
 }
 
 export async function upsertRoutingPreference(
-  studentProfileId: string,
+  userProfileId: string,
   capability: AiCapability,
   provider: AiProvider
 ): Promise<void> {
-  const response = await apiRequest(`/profile/${studentProfileId}/routing/${capability}`, {
+  const response = await apiRequest(`/profile/${userProfileId}/routing/${capability}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ provider })
@@ -44,12 +44,12 @@ export async function upsertRoutingPreference(
 }
 
 export async function updateAllRoutingPreferences(
-  studentProfileId: string,
+  userProfileId: string,
   preferences: AiRoutingPreferences
 ): Promise<void> {
   await Promise.all(
     (Object.entries(preferences) as [AiCapability, AiProvider][]).map(
-      ([capability, provider]) => upsertRoutingPreference(studentProfileId, capability, provider)
+      ([capability, provider]) => upsertRoutingPreference(userProfileId, capability, provider)
     )
   );
 }

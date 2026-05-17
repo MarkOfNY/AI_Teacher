@@ -6,8 +6,7 @@ describe('Prisma schema', () => {
 
   it('defines core AI Teacher models', () => {
     expect(schema).toContain('model User');
-    expect(schema).toContain('model ParentStudent');
-    expect(schema).toContain('model StudentProfile');
+    expect(schema).toContain('model UserProfile');
     expect(schema).toContain('model Material');
     expect(schema).toContain('model MaterialChunk');
     expect(schema).toContain('model ParaphraseAttempt');

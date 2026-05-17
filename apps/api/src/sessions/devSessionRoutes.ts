@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { devSessionService } from './devSessionService';
 
 export interface DevSessionServiceLike {
-  ensureParentSession(): Promise<unknown>;
+  ensureUserSession(): Promise<unknown>;
 }
 
 export function createDevSessionRouter(service: DevSessionServiceLike = devSessionService) {
@@ -10,7 +10,7 @@ export function createDevSessionRouter(service: DevSessionServiceLike = devSessi
 
   router.post('/', async (_req, res, next) => {
     try {
-      const session = await service.ensureParentSession();
+      const session = await service.ensureUserSession();
       res.status(201).json(session);
     } catch (error) {
       next(error);

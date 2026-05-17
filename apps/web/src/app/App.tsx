@@ -4,7 +4,7 @@ import type { AiCapability, AiProvider, AiRoutingPreferences, ReadingLevel } fro
 import { DEFAULT_ROUTING_PREFERENCES } from '@ai-teacher/shared';
 import { defineVocabulary, explainContext, explainGaps, simplifyText } from '../api/aiClient';
 import {
-  createDevSession,
+  createUserSession,
   createMaterial,
   deleteMaterial,
   getMaterial,
@@ -68,9 +68,9 @@ function loadPersistedCredential(): string | null {
 }
 
 export function App() {
-  const hasQaSession = import.meta.env.DEV && new URLSearchParams(window.location.search).get('qaSession') === 'parent';
+  const hasQaSession = import.meta.env.DEV && new URLSearchParams(window.location.search).get('qaSession') === 'true';
   const [credential, setCredential] = useState<string | null>(
-    hasQaSession ? 'qa-parent-session' : loadPersistedCredential()
+    hasQaSession ? 'qa-session' : loadPersistedCredential()
   );
 
   function handleCredential(cred: string) {
@@ -83,7 +83,7 @@ export function App() {
     setCredential(null);
   }
   const [materials, setMaterials] = useState<MaterialSummary[]>([]);
-  const [studentProfileId, setStudentProfileId] = useState<string | null>(null);
+  const [userProfileId, setUserProfileId] = useState<string | null>(null);
   const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [selectedMaterial, setSelectedMaterial] = useState<MaterialDetailResponse | null>(null);
   const [score, setScore] = useState<ScoreResponse | null>(null);
@@ -112,27 +112,27 @@ export function App() {
     }
 
     let ignore = false;
-    setStatusMessage('Preparing student workspace...');
+    setStatusMessage('Preparing workspace...');
 
     void (async () => {
       try {
-        const session = await createDevSession();
+        const session = await createUserSession();
         if (ignore) return;
 
         const [loadedMaterials, loadedProfile] = await Promise.all([
-          listMaterials(session.student.id),
-          getProfile(session.student.id).catch(() => null)
+          listMaterials(session.user.id),
+          getProfile(session.user.id).catch(() => null)
         ]);
 
         if (!ignore) {
-          setStudentProfileId(session.student.id);
+          setUserProfileId(session.user.id);
           setMaterials(loadedMaterials);
           setProfile(loadedProfile);
           setStatusMessage(null);
         }
       } catch {
         if (!ignore) {
-          setStatusMessage('Could not prepare the student workspace. Check that the API is running.');
+          setStatusMessage('Could not prepare workspace. Check that the API is running.');
         }
       }
     })();
@@ -186,7 +186,7 @@ export function App() {
   }
 
   async function handleCreateMaterial(input: CreateMaterialInput) {
-    if (!studentProfileId) {
+    if (!userProfileId) {
       setStatusMessage('Student workspace is still loading. Try again in a moment.');
       return;
     }
@@ -194,7 +194,7 @@ export function App() {
     setStatusMessage('Creating lesson...');
     try {
       const material = await createMaterial({
-        studentProfileId,
+        userProfileId,
         title: input.title,
         originalText: input.originalText,
       });
@@ -488,10 +488,10 @@ export function App() {
   }
 
   async function handleSaveThresholds(input: { chunkMasteryThreshold: number; finalSummaryMasteryThreshold: number }) {
-    if (!studentProfileId) return;
+    if (!userProfileId) return;
     setIsSavingSettings(true);
     try {
-      await updateThresholds(studentProfileId, input);
+      await updateThresholds(userProfileId, input);
       setProfile((current) => current ? { ...current, ...input } : null);
       setStatusMessage('Thresholds saved.');
     } catch {
@@ -502,10 +502,10 @@ export function App() {
   }
 
   async function handleSaveRoutingPreferences(prefs: AiRoutingPreferences) {
-    if (!studentProfileId) return;
+    if (!userProfileId) return;
     setIsSavingRouting(true);
     try {
-      await updateAllRoutingPreferences(studentProfileId, prefs);
+      await updateAllRoutingPreferences(userProfileId, prefs);
       setProfile((current) => current ? { ...current, routingPreferences: prefs } : null);
       setStatusMessage('AI routing saved.');
     } catch {
@@ -520,7 +520,6 @@ export function App() {
       <main className="app-shell">
         <header className="app-header">
           <div>
-            <p className="eyebrow">Parent Workspace</p>
             <h1>AI Teacher</h1>
           </div>
           <div className="header-actions">
@@ -702,7 +701,7 @@ export function App() {
       <section className="login-panel">
         <p className="eyebrow">Reading comprehension support</p>
         <h1>AI Teacher</h1>
-        <p className="login-copy">Sign in to create lessons, review progress, and tune support settings.</p>
+        <p className="login-copy">Sign in to start lessons, track progress, and tune support settings.</p>
         {googleClientId ? (
           <GoogleOAuthProvider clientId={googleClientId}>
             <GoogleLoginButton onCredential={handleCredential} />

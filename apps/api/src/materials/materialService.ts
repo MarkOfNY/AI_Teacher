@@ -102,12 +102,12 @@ function countSentencesForCap(text: string) {
 }
 
 export const materialService = {
-  async createMaterial(input: { studentProfileId: string; title: string; originalText: string; readingPartCount?: number }) {
+  async createMaterial(input: { userProfileId: string; title: string; originalText: string; readingPartCount?: number }) {
     const chunks = chunkText(input.originalText, { readingPartCount: input.readingPartCount });
 
     return prisma.material.create({
       data: {
-        studentProfileId: input.studentProfileId,
+        userProfileId: input.userProfileId,
         title: input.title,
         originalText: input.originalText,
         chunks: {
@@ -118,9 +118,9 @@ export const materialService = {
     });
   },
 
-  async listMaterials(studentProfileId: string) {
+  async listMaterials(userProfileId: string) {
     return prisma.material.findMany({
-      where: { studentProfileId },
+      where: { userProfileId },
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,
@@ -244,7 +244,7 @@ export const materialService = {
       where: { id: input.materialId },
       include: {
         chunks: { orderBy: { index: 'asc' } },
-        studentProfile: { include: { routingPreferences: true } }
+        userProfile: { include: { routingPreferences: true } }
       }
     });
 
@@ -261,13 +261,13 @@ export const materialService = {
     }
 
     const threshold = input.scope === 'chunk'
-      ? material.studentProfile.chunkMasteryThreshold
-      : material.studentProfile.finalSummaryMasteryThreshold;
+      ? material.userProfile.chunkMasteryThreshold
+      : material.userProfile.finalSummaryMasteryThreshold;
     const referenceText = chunk?.text ?? material.originalText;
 
     const scoringCapability = input.scope === 'chunk' ? 'scoreChunkParaphrase' : 'scoreFinalSummary';
-    const routingPref = material.studentProfile.routingPreferences.find((p) => p.capability === scoringCapability);
-    const fallbackPref = material.studentProfile.routingPreferences.find((p) => p.capability === 'fallback');
+    const routingPref = material.userProfile.routingPreferences.find((p) => p.capability === scoringCapability);
+    const fallbackPref = material.userProfile.routingPreferences.find((p) => p.capability === 'fallback');
     const SCORING_PROVIDERS: ScoringProvider[] = ['qwen', 'deepseek', 'openai'];
     const scoringProvider: ScoringProvider = SCORING_PROVIDERS.includes(routingPref?.provider as ScoringProvider)
       ? routingPref!.provider as ScoringProvider
@@ -319,7 +319,7 @@ export const materialService = {
     const nextStatus = determineMaterialStatus({
       chunkStatuses: refreshed.chunks.map((candidate) => candidate.status as 'notStarted' | 'inProgress' | 'mastered'),
       finalScore: refreshed.finalBestScore,
-      finalThreshold: material.studentProfile.finalSummaryMasteryThreshold
+      finalThreshold: material.userProfile.finalSummaryMasteryThreshold
     });
     await prisma.material.update({ where: { id: material.id }, data: { status: nextStatus } });
 

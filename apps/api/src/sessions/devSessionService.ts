@@ -1,55 +1,28 @@
 import { prisma } from '../db/prisma';
 
 export const devSessionService = {
-  async ensureParentSession() {
-    const parent = await prisma.user.upsert({
-      where: { googleSubject: 'dev-parent' },
+  async ensureUserSession() {
+    const user = await prisma.user.upsert({
+      where: { googleSubject: 'dev-user' },
       update: {},
       create: {
-        googleSubject: 'dev-parent',
-        email: 'parent@example.test',
-        displayName: 'Demo Parent',
-        role: 'parent'
+        googleSubject: 'dev-user',
+        email: 'user@example.test',
+        displayName: 'Demo User'
       }
     });
 
-    const studentUser = await prisma.user.upsert({
-      where: { googleSubject: 'dev-student' },
+    const userProfile = await prisma.userProfile.upsert({
+      where: { userId: user.id },
       update: {},
       create: {
-        googleSubject: 'dev-student',
-        email: 'student@example.test',
-        displayName: 'Demo Student',
-        role: 'student'
-      }
-    });
-
-    const student = await prisma.studentProfile.upsert({
-      where: { userId: studentUser.id },
-      update: {},
-      create: {
-        userId: studentUser.id,
-        displayName: 'Demo Student'
-      }
-    });
-
-    await prisma.parentStudent.upsert({
-      where: {
-        parentId_studentId: {
-          parentId: parent.id,
-          studentId: student.id
-        }
-      },
-      update: {},
-      create: {
-        parentId: parent.id,
-        studentId: student.id
+        userId: user.id,
+        displayName: user.displayName
       }
     });
 
     return {
-      parent: { id: parent.id, displayName: parent.displayName },
-      student: { id: student.id, displayName: student.displayName }
+      user: { id: userProfile.id, displayName: userProfile.displayName }
     };
   }
 };

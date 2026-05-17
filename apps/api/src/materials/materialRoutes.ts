@@ -79,7 +79,7 @@ async function extractTextFromScannedPdf(buffer: Buffer): Promise<string> {
 }
 
 const CreateMaterialSchema = z.object({
-  studentProfileId: z.string().min(1),
+  userProfileId: z.string().min(1),
   title: z.string().min(1),
   originalText: z.string().min(1),
   readingPartCount: z.number().int().min(1).optional()
@@ -106,7 +106,7 @@ const SuggestReadingPartsSchema = z.object({
 
 export interface MaterialServiceLike {
   createMaterial(input: z.infer<typeof CreateMaterialSchema>): Promise<unknown>;
-  listMaterials(studentProfileId: string): Promise<unknown>;
+  listMaterials(userProfileId: string): Promise<unknown>;
   getMaterial(materialId: string): Promise<unknown | null>;
   updateMaterial(input: { materialId: string } & z.infer<typeof UpdateMaterialSchema>): Promise<unknown>;
   deleteMaterial(materialId: string): Promise<void>;
@@ -159,13 +159,13 @@ export function createMaterialRouter(service: MaterialServiceLike = materialServ
 
   router.get('/', async (req, res, next) => {
     try {
-      const studentProfileId = z.string().min(1).safeParse(req.query.studentProfileId);
-      if (!studentProfileId.success) {
-        res.status(400).json({ error: 'studentProfileId is required' });
+      const userProfileId = z.string().min(1).safeParse(req.query.userProfileId);
+      if (!userProfileId.success) {
+        res.status(400).json({ error: 'userProfileId is required' });
         return;
       }
 
-      const materials = await service.listMaterials(studentProfileId.data);
+      const materials = await service.listMaterials(userProfileId.data);
       res.json(materials);
     } catch (error) {
       next(error);

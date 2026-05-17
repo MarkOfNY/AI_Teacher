@@ -8,37 +8,23 @@ datasource db {
 }
 
 model User {
-  id             String          @id @default(cuid())
-  googleSubject  String          @unique
-  email          String          @unique
-  displayName    String
-  role           String
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  studentProfile StudentProfile? @relation("StudentUser")
-  parentLinks    ParentStudent[] @relation("ParentLinks")
+  id            String       @id @default(cuid())
+  googleSubject String       @unique
+  email         String       @unique
+  displayName   String
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  userProfile   UserProfile? @relation("UserProfile")
 }
 
-model ParentStudent {
-  id        String         @id @default(cuid())
-  parentId  String
-  studentId String
-  parent    User           @relation("ParentLinks", fields: [parentId], references: [id])
-  student   StudentProfile @relation(fields: [studentId], references: [id])
-  createdAt DateTime       @default(now())
-
-  @@unique([parentId, studentId])
-}
-
-model StudentProfile {
+model UserProfile {
   id                           String                @id @default(cuid())
   userId                       String?               @unique
   displayName                  String
   preferredReadingLevel        String                @default("simple")
   chunkMasteryThreshold        Int                   @default(80)
   finalSummaryMasteryThreshold Int                   @default(80)
-  user                         User?                 @relation("StudentUser", fields: [userId], references: [id])
-  parentLinks                  ParentStudent[]
+  user                         User?                 @relation("UserProfile", fields: [userId], references: [id])
   materials                    Material[]
   routingPreferences           AiRoutingPreference[]
   createdAt                    DateTime              @default(now())
@@ -46,17 +32,17 @@ model StudentProfile {
 }
 
 model Material {
-  id               String              @id @default(cuid())
-  studentProfileId String
-  title            String
-  originalText     String
-  status           String              @default("notStarted")
-  finalBestScore   Int?
-  studentProfile   StudentProfile      @relation(fields: [studentProfileId], references: [id])
-  chunks           MaterialChunk[]
-  attempts         ParaphraseAttempt[]
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
+  id             String              @id @default(cuid())
+  userProfileId  String
+  title          String
+  originalText   String
+  status         String              @default("notStarted")
+  finalBestScore Int?
+  userProfile    UserProfile         @relation(fields: [userProfileId], references: [id])
+  chunks         MaterialChunk[]
+  attempts       ParaphraseAttempt[]
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
 }
 
 model MaterialChunk {
@@ -88,11 +74,11 @@ model ParaphraseAttempt {
 }
 
 model AiRoutingPreference {
-  id               String         @id @default(cuid())
-  studentProfileId String
-  capability       String
-  provider         String
-  studentProfile   StudentProfile @relation(fields: [studentProfileId], references: [id])
+  id            String      @id @default(cuid())
+  userProfileId String
+  capability    String
+  provider      String
+  userProfile   UserProfile @relation(fields: [userProfileId], references: [id])
 
-  @@unique([studentProfileId, capability])
+  @@unique([userProfileId, capability])
 }

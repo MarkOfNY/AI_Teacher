@@ -7,19 +7,18 @@ function testApp() {
   const app = express();
   app.use(express.json());
   app.use('/dev-session', createDevSessionRouter({
-    ensureParentSession: async () => ({
-      parent: { id: 'parent_1', displayName: 'Parent' },
-      student: { id: 'student_1', displayName: 'Student' }
+    ensureUserSession: async () => ({
+      user: { id: 'user_1', displayName: 'Demo User' }
     })
   }));
   return app;
 }
 
 describe('dev session routes', () => {
-  it('returns a parent and student profile for local browser testing', async () => {
+  it('returns a user profile for local browser testing', async () => {
     const response = await request(testApp()).post('/dev-session');
 
     expect(response.status).toBe(201);
-    expect(response.body.student.id).toBe('student_1');
+    expect(response.body.user.id).toBe('user_1');
   });
 });
