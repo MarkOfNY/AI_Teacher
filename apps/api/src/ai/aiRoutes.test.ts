@@ -12,7 +12,8 @@ function testApp() {
     simplifyText: async () => 'A simpler explanation.',
     explainContext: async () => 'This matters because it connects to the event.',
     explainGaps: async () => 'Focus on the missing cause and result.',
-    defineVocabulary: async () => 'Liberty means freedom in this sentence.'
+    defineVocabulary: async () => 'Liberty means freedom in this sentence.',
+    scoreParaphrase: async () => ({ score: 95, passed: true, rubric: { mainIdea: 95, keyDetails: 95, context: 95, whyItMatters: 95, accuracy: 95 }, understood: [], missed: [], feedback: 'Good.' })
   }));
   return app;
 }
@@ -68,7 +69,8 @@ describe('ai routes', () => {
       },
       explainContext: async () => 'unused',
       explainGaps: async () => 'unused',
-      defineVocabulary: async () => 'unused'
+      defineVocabulary: async () => 'unused',
+      scoreParaphrase: async () => ({ score: 95, passed: true, rubric: { mainIdea: 95, keyDetails: 95, context: 95, whyItMatters: 95, accuracy: 95 }, understood: [], missed: [], feedback: 'Good.' })
     }));
 
     const response = await request(app)

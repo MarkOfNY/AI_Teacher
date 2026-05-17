@@ -31,8 +31,8 @@ describe('score paraphrase prompt', () => {
 
     const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
     const prompt = body.messages[1].content as string;
-    expect(prompt).toContain('Do not penalize accurate extra background or context');
-    expect(prompt).toContain('app explanation');
+    expect(prompt).toContain('judge on whether the key ideas and concepts were captured');
+    expect(prompt).toContain('you" and "your');
 
     vi.unstubAllGlobals();
   });

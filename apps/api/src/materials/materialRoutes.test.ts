@@ -63,7 +63,7 @@ describe('material routes', () => {
   it('creates material from pasted text', async () => {
     const response = await request(testApp())
       .post('/materials')
-      .send({ studentProfileId: 'student_1', title: 'History', originalText: 'A.' });
+      .send({ userProfileId: 'student_1', title: 'History', originalText: 'A.' });
 
     expect(response.status).toBe(201);
     expect(response.body.title).toBe('History');
@@ -73,7 +73,7 @@ describe('material routes', () => {
   it('accepts a requested number of reading parts', async () => {
     const response = await request(testApp())
       .post('/materials')
-      .send({ studentProfileId: 'student_1', title: 'History', originalText: 'A. B.', readingPartCount: 2 });
+      .send({ userProfileId: 'student_1', title: 'History', originalText: 'A. B.', readingPartCount: 2 });
 
     expect(response.status).toBe(201);
     expect(response.body.readingPartCount).toBe(2);
@@ -82,13 +82,13 @@ describe('material routes', () => {
   it('rejects empty text', async () => {
     const response = await request(testApp())
       .post('/materials')
-      .send({ studentProfileId: 'student_1', title: 'History', originalText: '' });
+      .send({ userProfileId: 'student_1', title: 'History', originalText: '' });
 
     expect(response.status).toBe(400);
   });
 
   it('lists materials for a student profile', async () => {
-    const response = await request(testApp()).get('/materials?studentProfileId=student_1');
+    const response = await request(testApp()).get('/materials?userProfileId=student_1');
 
     expect(response.status).toBe(200);
     expect(response.body[0].title).toBe('History');

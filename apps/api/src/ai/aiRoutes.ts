@@ -1,4 +1,4 @@
-import type { AiProvider, ReadingLevel } from '@ai-teacher/shared';
+import type { AiProvider, ReadingLevel, ScoreResult } from '@ai-teacher/shared';
 import { Router } from 'express';
 import { z } from 'zod';
 import { logAiError } from './aiErrorLogger';
@@ -36,6 +36,31 @@ export interface AiTeachingServiceLike {
   explainContext(input: { provider: AiProvider; text: string }): Promise<string>;
   explainGaps(input: { provider: AiProvider; text: string; missed: string[]; attempt?: number }): Promise<string>;
   defineVocabulary(input: { provider: AiProvider; term: string; contextText: string }): Promise<string>;
+  scoreParaphrase(input: { provider: AiProvider; referenceText: string; transcript: string; threshold: number }): Promise<ScoreResult>;
+}
+
+const EXPLAIN_PASS_THRESHOLD = 90;
+const EXPLAIN_MAX_ATTEMPTS = 3;
+
+async function verifyExplanation(
+  generate: () => Promise<string>,
+  referenceText: string,
+  provider: AiProvider,
+  service: AiTeachingServiceLike
+): Promise<string> {
+  let bestText = '';
+  let bestScore = -1;
+  for (let attempt = 0; attempt < EXPLAIN_MAX_ATTEMPTS; attempt++) {
+    const explanation = await generate();
+    try {
+      const result = await service.scoreParaphrase({ provider, referenceText, transcript: explanation, threshold: EXPLAIN_PASS_THRESHOLD });
+      if (result.score >= EXPLAIN_PASS_THRESHOLD) return explanation;
+      if (result.score > bestScore) { bestScore = result.score; bestText = explanation; }
+    } catch {
+      return explanation;
+    }
+  }
+  return bestText;
 }
 
 function providerLabel(provider: AiProvider) {
@@ -98,7 +123,12 @@ export function createAiRouterRoutes(service: AiTeachingServiceLike = aiTeaching
         return;
       }
 
-      const explanation = await service.explainContext(parsed.data);
+      const explanation = await verifyExplanation(
+        () => service.explainContext(parsed.data),
+        parsed.data.text,
+        parsed.data.provider,
+        service
+      );
       res.json({ explanation, provider: parsed.data.provider });
     } catch (error) {
       const parsed = ExplainContextSchema.safeParse(req.body);
@@ -118,7 +148,12 @@ export function createAiRouterRoutes(service: AiTeachingServiceLike = aiTeaching
         return;
       }
 
-      const explanation = await service.explainGaps(parsed.data);
+      const explanation = await verifyExplanation(
+        () => service.explainGaps(parsed.data),
+        parsed.data.text,
+        parsed.data.provider,
+        service
+      );
       res.json({ explanation, provider: parsed.data.provider });
     } catch (error) {
       const parsed = ExplainGapsSchema.safeParse(req.body);

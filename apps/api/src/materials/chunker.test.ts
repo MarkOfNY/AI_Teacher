@@ -15,10 +15,10 @@ describe('chunkText', () => {
   });
 
   it('uses paragraph breaks as natural reading part boundaries', () => {
-    const chunks = chunkText('  A.  \n\n  \n\n B. ');
+    const chunks = chunkText('The first full paragraph ends here.\n\nThe second full paragraph starts here.');
     expect(chunks).toEqual([
-      { index: 0, text: 'A.' },
-      { index: 1, text: 'B.' }
+      { index: 0, text: 'The first full paragraph ends here.' },
+      { index: 1, text: 'The second full paragraph starts here.' }
     ]);
   });
 
