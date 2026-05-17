@@ -38,11 +38,15 @@ function suggestedPartCountForText(text: string) {
 
 const MIN_STANDALONE_PARAGRAPH_WORDS = 5;
 
+function isSourceCitation(paragraph: string) {
+  return /^source[:\s]/i.test(paragraph) || /^https?:\/\/\S+$/i.test(paragraph);
+}
+
 function splitParagraphs(text: string) {
   const raw = text
     .split(/\n\s*\n/g)
     .map((paragraph) => paragraph.replace(/\s+/g, ' ').trim())
-    .filter(Boolean);
+    .filter((paragraph) => Boolean(paragraph) && !isSourceCitation(paragraph));
 
   // Merge fragments that are too short to stand alone (e.g. lone section numbers)
   // into the paragraph that follows them.
