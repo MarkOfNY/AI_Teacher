@@ -266,7 +266,12 @@ export const materialService = {
         let best = '';
         let bestScore = -1;
         for (let attempt = 0; attempt < MAX_TRIES; attempt++) {
-          const text = await aiTeachingService.simplifyText({ provider, text: chunk.text, readingLevel: input.readingLevel });
+          let text: string;
+          try {
+            text = await aiTeachingService.simplifyText({ provider, text: chunk.text, readingLevel: input.readingLevel });
+          } catch {
+            break;
+          }
           try {
             const result = await aiTeachingService.scoreParaphrase({ provider, referenceText: chunk.text, transcript: text, threshold: THRESHOLD });
             if (result.score >= THRESHOLD) { best = text; break; }

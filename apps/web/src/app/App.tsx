@@ -320,6 +320,19 @@ export function App() {
         }
       }
 
+      const needsSimplifications = material.chunks.some(
+        (chunk) => (chunk.simplifications?.simple?.length ?? 0) < 5
+      );
+      if (needsSimplifications) {
+        setStatusMessage('Generating simplified explanations...');
+        try {
+          const updated = await generateSimplifications(material.id, 'simple', getSimplifyProvider());
+          material = updated;
+        } catch {
+          // Non-fatal — lesson works with fallback explanations
+        }
+      }
+
       setSelectedMaterial(material);
       setScore(null);
       setFinalScore(null);
@@ -328,11 +341,6 @@ export function App() {
       setDefinitionTexts({});
       setIsSimplificationsLoading(false);
       setStatusMessage('Preparing audio...');
-
-      const needsSimplifications = material.chunks.some(
-        (chunk) => (chunk.simplifications?.simple?.length ?? 0) < 5
-      );
-      if (needsSimplifications) triggerSimplificationGeneration(material.id, 'simple');
       // isMaterialLoading stays true here — cleared by handleFirstAudioCached once first chunk audio is ready
     } catch {
       setStatusMessage('Could not open the lesson. Check that the API is running.');
@@ -347,19 +355,10 @@ export function App() {
     setStatusMessage(null);
   }, []);
 
-  function triggerSimplificationGeneration(materialId: string, readingLevel: ReadingLevel) {
-    const prefs = profile?.routingPreferences ?? DEFAULT_ROUTING_PREFERENCES;
-    const provider = prefs.simplifyText === 'disabled' || prefs.simplifyText === 'browserTts'
-      ? 'qwen'
-      : prefs.simplifyText;
-    if (readingLevel === 'original') return;
-    setIsSimplificationsLoading(true);
-    void generateSimplifications(materialId, readingLevel as Exclude<ReadingLevel, 'original'>, provider)
-      .then((updated) => {
-        setSelectedMaterial((current) => current?.id === materialId ? updated : current);
-      })
-      .catch(() => undefined)
-      .finally(() => setIsSimplificationsLoading(false));
+  function getSimplifyProvider(): 'qwen' | 'deepseek' | 'openai' {
+    const p = (profile?.routingPreferences ?? DEFAULT_ROUTING_PREFERENCES).simplifyText;
+    if (!p || p === 'disabled' || p === 'browserTts') return 'qwen';
+    return p as 'qwen' | 'deepseek' | 'openai';
   }
 
   async function handleSubmitParaphrase(input: { chunkId: string; transcript: string; referenceText: string }) {
@@ -470,7 +469,13 @@ export function App() {
     const needsSimplifications = selectedMaterial.chunks.some(
       (chunk) => (chunk.simplifications?.[level]?.length ?? 0) < 5
     );
-    if (needsSimplifications) triggerSimplificationGeneration(selectedMaterial.id, level);
+    if (!needsSimplifications) return;
+    const materialId = selectedMaterial.id;
+    setIsSimplificationsLoading(true);
+    void generateSimplifications(materialId, level as Exclude<ReadingLevel, 'original'>, getSimplifyProvider())
+      .then((updated) => setSelectedMaterial((current) => current?.id === materialId ? updated : current))
+      .catch(() => undefined)
+      .finally(() => setIsSimplificationsLoading(false));
   }
 
   async function handleChangeReadingPartCount(readingPartCount: number) {
