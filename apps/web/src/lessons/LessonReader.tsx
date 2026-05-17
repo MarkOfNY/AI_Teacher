@@ -739,7 +739,14 @@ export function LessonReader({
                       </div>
                     </div>
                     <p>{supportLoadingChunkId === chunk.id ? 'Thinking through this context...' : contextTexts[chunk.id] ?? 'Context will appear here in a moment.'}</p>
-                    <button type="button" className="secondary-button compact-button" onClick={() => onExplainAgain?.({ chunkId: chunk.id, text: chunk.text })}>
+                    <button type="button" className="secondary-button compact-button" onClick={() => {
+                      if (speakingChunkId === `${chunk.id}-explanation`) {
+                        activeAudioRef.current?.pause();
+                        activeAudioRef.current = null;
+                        setSpeakingChunkId(null);
+                      }
+                      onExplainAgain?.({ chunkId: chunk.id, text: chunk.text });
+                    }}>
                       Explain This Better
                     </button>
                   </div>
