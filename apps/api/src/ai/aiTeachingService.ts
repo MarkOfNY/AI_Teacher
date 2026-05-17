@@ -12,7 +12,7 @@ const router = createAiRouter({
 });
 
 export const aiTeachingService = {
-  simplifyText(input: { provider: AiProvider; text: string; readingLevel: ReadingLevel; hint?: string }) {
+  simplifyText(input: { provider: AiProvider; text: string; readingLevel: ReadingLevel; hint?: string; temperature?: number }) {
     return router.simplifyText(input);
   },
 

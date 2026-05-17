@@ -325,18 +325,18 @@ export const materialService = {
     if (needed === 0) return { id: chunk.id, simplifications: stored };
 
     const provider = input.provider ?? 'qwen';
-    const HINTS = [
-      undefined,
-      'Use very short, simple sentences.',
-      'Lead with the most important idea first.',
-      'Explain difficult words simply as you go.',
-      'Focus on the cause, effect, and significance.'
+    const VERSION_CONFIGS = [
+      { hint: undefined, temperature: 0.4 },
+      { hint: 'Use very short sentences. One idea per sentence.', temperature: 0.6 },
+      { hint: 'Start with the single most important point, then add supporting details.', temperature: 0.7 },
+      { hint: 'Write this as if explaining to a curious friend. Use natural, conversational language.', temperature: 0.8 },
+      { hint: 'Structure your answer around: what happened, why it happened, and why it matters.', temperature: 0.9 }
     ] as const;
 
     const newVersions = await Promise.all(
       Array.from({ length: needed }, (_, i) => {
-        const hint = HINTS[(existing.length + i) % HINTS.length];
-        return aiTeachingService.simplifyText({ provider, text: chunk.text, readingLevel: input.readingLevel, hint }).catch(() => null);
+        const { hint, temperature } = VERSION_CONFIGS[(existing.length + i) % VERSION_CONFIGS.length];
+        return aiTeachingService.simplifyText({ provider, text: chunk.text, readingLevel: input.readingLevel, hint, temperature }).catch(() => null);
       })
     );
 

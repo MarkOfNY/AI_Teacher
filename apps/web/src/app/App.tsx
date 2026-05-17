@@ -328,7 +328,11 @@ export function App() {
       setDefinitionTexts({});
       setSimplificationsProgress(null);
       setStatusMessage('Preparing audio...');
-      runSimplificationGeneration(material, 'simple');
+      void (async () => {
+        for (const level of ['simple', 'verySimple', 'middleSchool'] as const) {
+          await runSimplificationGeneration(material, level);
+        }
+      })();
       // isMaterialLoading stays true here — cleared by handleFirstAudioCached once first chunk audio is ready
     } catch {
       setStatusMessage('Could not open the lesson. Check that the API is running.');
@@ -349,17 +353,17 @@ export function App() {
     return p as 'qwen' | 'deepseek' | 'openai';
   }
 
-  function runSimplificationGeneration(material: MaterialDetailResponse, readingLevel: Exclude<ReadingLevel, 'original'>) {
+  function runSimplificationGeneration(material: MaterialDetailResponse, readingLevel: Exclude<ReadingLevel, 'original'>): Promise<void> {
     const chunksNeeding = material.chunks.filter(
       (c) => (c.simplifications?.[readingLevel]?.length ?? 0) < 5
     );
-    if (chunksNeeding.length === 0) return;
+    if (chunksNeeding.length === 0) return Promise.resolve();
 
     const materialId = material.id;
     const provider = getSimplifyProvider();
     setSimplificationsProgress({ ready: 0, total: chunksNeeding.length });
 
-    void (async () => {
+    return (async () => {
       let ready = 0;
       for (const chunk of chunksNeeding) {
         try {
@@ -488,7 +492,7 @@ export function App() {
 
   function handleReadingLevelChange(level: ReadingLevel) {
     if (!selectedMaterial || level === 'original') return;
-    runSimplificationGeneration(selectedMaterial, level as Exclude<ReadingLevel, 'original'>);
+    void runSimplificationGeneration(selectedMaterial, level as Exclude<ReadingLevel, 'original'>);
   }
 
   async function handleChangeReadingPartCount(readingPartCount: number) {
