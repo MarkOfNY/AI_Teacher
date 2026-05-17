@@ -1,3 +1,5 @@
+import type { ReadingLevel } from '@ai-teacher/shared';
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.trim() || 'http://localhost:3001';
 
 export interface MaterialChunkResponse {
@@ -7,6 +9,7 @@ export interface MaterialChunkResponse {
   text: string;
   status: 'notStarted' | 'inProgress' | 'mastered';
   bestScore: number | null;
+  simplifications?: Partial<Record<ReadingLevel, string[]>>;
 }
 
 export interface UserSession {
@@ -144,6 +147,16 @@ export async function extractFile(file: File): Promise<{ text: string }> {
     throw new Error(body?.error ?? 'Unable to extract text from file.');
   }
   return response.json() as Promise<{ text: string }>;
+}
+
+export async function generateSimplifications(materialId: string, readingLevel: Exclude<ReadingLevel, 'original'>, provider = 'qwen') {
+  const response = await fetch(`${API_BASE_URL}/materials/${materialId}/simplifications`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ readingLevel, provider })
+  });
+  if (!response.ok) throw new Error('Unable to generate simplifications.');
+  return response.json() as Promise<MaterialDetailResponse>;
 }
 
 export async function submitParaphraseAttempt(input: SubmitParaphraseAttemptRequest) {

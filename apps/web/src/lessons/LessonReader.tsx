@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.trim() || 'http://localhost:3001';
-import { Lightbulb, Mic, Square, Volume2, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Lightbulb, Mic, Square, Volume2, X } from 'lucide-react';
 import type { MaterialChunk, ReadingLevel } from '@ai-teacher/shared';
 import { SelectableText } from './SelectableText';
 
@@ -60,9 +60,11 @@ interface LessonReaderProps {
   isSupportLoading?: boolean;
   supportLoadingChunkId?: string | null;
   isReaderProcessing?: boolean;
+  isSimplificationsLoading?: boolean;
   onSimplify?: (input: { chunkId: string; text: string; readingLevel: ReadingLevel }) => void;
   onExplainContext?: (input: { chunkId: string; text: string }) => void;
   onExplainAgain?: (input: { chunkId: string; text: string }) => void;
+  onReadingLevelChange?: (level: ReadingLevel) => void;
   onDefineVocabulary?: (input: { chunkId: string; selectedText: string; contextText: string }) => void;
   onFirstAudioCached?: () => void;
 }
@@ -107,9 +109,11 @@ export function LessonReader({
   isSupportLoading = false,
   supportLoadingChunkId = null,
   isReaderProcessing = false,
+  isSimplificationsLoading = false,
   onSimplify,
   onExplainContext,
   onExplainAgain,
+  onReadingLevelChange,
   onDefineVocabulary,
   onFirstAudioCached
 }: LessonReaderProps) {
@@ -120,6 +124,7 @@ export function LessonReader({
   const [dictationMessages, setDictationMessages] = useState<Record<string, string>>({});
   const [finalTranscript, setFinalTranscript] = useState('');
   const [openContextChunkId, setOpenContextChunkId] = useState<string | null>(null);
+  const [explainVersionIndex, setExplainVersionIndex] = useState<Record<string, number>>({});
   const [dismissedDefinitionTexts, setDismissedDefinitionTexts] = useState<Record<string, string>>({});
   const [isChangingReadingLevel, setIsChangingReadingLevel] = useState(false);
   const [speakingChunkId, setSpeakingChunkId] = useState<string | null>(null);
@@ -250,11 +255,10 @@ export function LessonReader({
     if (!onSimplify) return;
 
     chunks.forEach((chunk) => {
+      const hasStored = (chunk.simplifications?.[readingLevel]?.length ?? 0) > 0;
+      if (hasStored) return;
       const requestKey = `${chunk.id}:${readingLevel}`;
-      if (simplifiedTexts[chunk.id] || requestedSimplificationsRef.current.has(requestKey)) {
-        return;
-      }
-
+      if (simplifiedTexts[chunk.id] || requestedSimplificationsRef.current.has(requestKey)) return;
       requestedSimplificationsRef.current.add(requestKey);
       onSimplify({ chunkId: chunk.id, text: chunk.text, readingLevel });
     });
@@ -271,9 +275,8 @@ export function LessonReader({
     setReadingLevel(nextLevel);
     setIsChangingReadingLevel(true);
     setSimplifiedVisible({});
-    chunks.forEach((chunk) => {
-      onSimplify?.({ chunkId: chunk.id, text: chunk.text, readingLevel: nextLevel });
-    });
+    setExplainVersionIndex({});
+    onReadingLevelChange?.(nextLevel);
   }
 
   function setReadingPartMode(chunk: MaterialChunk, mode: 'original' | 'simplified') {
@@ -283,7 +286,8 @@ export function LessonReader({
       activeAudioRef.current = null;
       setSpeakingChunkId(null);
     }
-    if (mode === 'simplified' && !simplifiedTexts[chunk.id]) {
+    const hasStoredSimplification = (chunk.simplifications?.[readingLevel]?.length ?? 0) > 0;
+    if (mode === 'simplified' && !hasStoredSimplification && !simplifiedTexts[chunk.id]) {
       onSimplify?.({ chunkId: chunk.id, text: chunk.text, readingLevel });
     }
     setSimplifiedVisible((current) => ({ ...current, [chunk.id]: mode === 'simplified' }));
@@ -295,8 +299,12 @@ export function LessonReader({
   }
 
   function handleContextClick(chunk: MaterialChunk) {
+    const isOpening = openContextChunkId !== chunk.id;
     setOpenContextChunkId((currentId) => currentId === chunk.id ? null : chunk.id);
-    onExplainContext?.({ chunkId: chunk.id, text: chunk.text });
+    if (isOpening) {
+      const hasStored = (chunk.simplifications?.[readingLevel]?.length ?? 0) > 0;
+      if (!hasStored) onExplainContext?.({ chunkId: chunk.id, text: chunk.text });
+    }
   }
 
   function handleReviewAgain(chunk: MaterialChunk) {
@@ -542,6 +550,9 @@ export function LessonReader({
           </div>
         </div>
 
+        {isSimplificationsLoading && !wholeReaderProcessing ? (
+          <div className="setup-notice" role="status">Preparing simplified explanations in the background...</div>
+        ) : null}
         {isSupportLoading && !openContextChunkId && !wholeReaderProcessing ? (
           <div className="setup-notice" role="status">Thinking through this part...</div>
         ) : null}
@@ -553,11 +564,13 @@ export function LessonReader({
             const locked = isLocked(index);
             const testing = testChunkId === chunk.id;
             const simplifiedMode = simplifiedVisible[chunk.id] !== false;
-            const visibleText = simplifiedMode && simplifiedTexts[chunk.id]
-              ? simplifiedTexts[chunk.id]
+            const storedSimplified = chunk.simplifications?.[readingLevel]?.[0] ?? '';
+            const visibleText = simplifiedMode && (storedSimplified || simplifiedTexts[chunk.id])
+              ? (storedSimplified || simplifiedTexts[chunk.id])
               : chunk.text;
             const isSimplifying = Boolean(
               simplifiedMode
+              && !storedSimplified
               && !simplifiedTexts[chunk.id]
               && isSupportLoading
               && supportLoadingChunkId === chunk.id
@@ -699,58 +712,116 @@ export function LessonReader({
                   />
                 </div>
 
-                {openContextChunkId === chunk.id ? (
-                  <div
-                    ref={(element) => {
-                      contextPopoverRefs.current[chunk.id] = element;
-                    }}
-                    role="dialog"
-                    aria-label={`Context for Reading Part ${chunk.index + 1}`}
-                    className="context-popover"
-                  >
-                    <div className="context-popover-header">
-                      <strong>Reading Part {chunk.index + 1} context</strong>
-                      <div className="context-popover-header-actions">
-                        {contextTexts[chunk.id] ? (
+                {openContextChunkId === chunk.id ? (() => {
+                  const chunkVersions = chunk.simplifications?.[readingLevel] ?? [];
+                  const hasStoredVersions = chunkVersions.length > 0;
+                  const versionIndex = explainVersionIndex[chunk.id] ?? 0;
+                  const explainText = hasStoredVersions
+                    ? chunkVersions[versionIndex]
+                    : contextTexts[chunk.id];
+                  const explainAudioKey = `${chunk.id}-explanation`;
+
+                  return (
+                    <div
+                      ref={(element) => {
+                        contextPopoverRefs.current[chunk.id] = element;
+                      }}
+                      role="dialog"
+                      aria-label={`Simplified explanation for Reading Part ${chunk.index + 1}`}
+                      className="context-popover"
+                    >
+                      <div className="context-popover-header">
+                        <strong>
+                          {hasStoredVersions
+                            ? `Simplified (${versionIndex + 1} of ${chunkVersions.length})`
+                            : `Reading Part ${chunk.index + 1} explanation`}
+                        </strong>
+                        <div className="context-popover-header-actions">
+                          {hasStoredVersions && chunkVersions.length > 1 ? (
+                            <>
+                              <button
+                                type="button"
+                                className="icon-button"
+                                aria-label="Previous simplified version"
+                                disabled={versionIndex === 0}
+                                onClick={() => {
+                                  if (speakingChunkId === explainAudioKey) {
+                                    activeAudioRef.current?.pause();
+                                    activeAudioRef.current = null;
+                                    setSpeakingChunkId(null);
+                                  }
+                                  setExplainVersionIndex((prev) => ({ ...prev, [chunk.id]: Math.max(0, versionIndex - 1) }));
+                                }}
+                              >
+                                <ChevronLeft size={16} aria-hidden="true" />
+                              </button>
+                              <button
+                                type="button"
+                                className="icon-button"
+                                aria-label="Next simplified version"
+                                disabled={versionIndex >= chunkVersions.length - 1}
+                                onClick={() => {
+                                  if (speakingChunkId === explainAudioKey) {
+                                    activeAudioRef.current?.pause();
+                                    activeAudioRef.current = null;
+                                    setSpeakingChunkId(null);
+                                  }
+                                  setExplainVersionIndex((prev) => ({ ...prev, [chunk.id]: Math.min(chunkVersions.length - 1, versionIndex + 1) }));
+                                }}
+                              >
+                                <ChevronRight size={16} aria-hidden="true" />
+                              </button>
+                            </>
+                          ) : null}
+                          {explainText ? (
+                            <button
+                              type="button"
+                              className="icon-button"
+                              aria-label={speakingChunkId === explainAudioKey ? `Stop reading explanation for Reading Part ${chunk.index + 1}` : `Read explanation for Reading Part ${chunk.index + 1} aloud`}
+                              onClick={() => void readTextAloud(explainAudioKey, explainText)}
+                            >
+                              {speakingChunkId === explainAudioKey ? <Square size={14} aria-hidden="true" /> : <Volume2 size={16} aria-hidden="true" />}
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             className="icon-button"
-                            aria-label={speakingChunkId === `${chunk.id}-explanation` ? `Stop reading explanation for Reading Part ${chunk.index + 1}` : `Read explanation for Reading Part ${chunk.index + 1} aloud`}
-                            onClick={() => void readTextAloud(`${chunk.id}-explanation`, contextTexts[chunk.id])}
+                            aria-label={`Close explanation for Reading Part ${chunk.index + 1}`}
+                            onClick={() => {
+                              if (speakingChunkId === explainAudioKey) {
+                                activeAudioRef.current?.pause();
+                                activeAudioRef.current = null;
+                                setSpeakingChunkId(null);
+                              }
+                              setOpenContextChunkId(null);
+                            }}
                           >
-                            {speakingChunkId === `${chunk.id}-explanation` ? <Square size={14} aria-hidden="true" /> : <Volume2 size={16} aria-hidden="true" />}
+                            <X size={16} aria-hidden="true" />
                           </button>
-                        ) : null}
-                        <button
-                          type="button"
-                          className="icon-button"
-                          aria-label={`Close context for Reading Part ${chunk.index + 1}`}
-                          onClick={() => {
-                            if (speakingChunkId === `${chunk.id}-explanation`) {
-                              activeAudioRef.current?.pause();
-                              activeAudioRef.current = null;
-                              setSpeakingChunkId(null);
-                            }
-                            setOpenContextChunkId(null);
-                          }}
-                        >
-                          <X size={16} aria-hidden="true" />
-                        </button>
+                        </div>
                       </div>
+                      <p>
+                        {hasStoredVersions
+                          ? explainText
+                          : (supportLoadingChunkId === chunk.id
+                              ? 'Thinking through this explanation...'
+                              : explainText ?? (isSimplificationsLoading ? 'Generating simplified explanations...' : 'Explanation will appear here in a moment.'))}
+                      </p>
+                      {!hasStoredVersions ? (
+                        <button type="button" className="secondary-button compact-button" onClick={() => {
+                          if (speakingChunkId === explainAudioKey) {
+                            activeAudioRef.current?.pause();
+                            activeAudioRef.current = null;
+                            setSpeakingChunkId(null);
+                          }
+                          onExplainAgain?.({ chunkId: chunk.id, text: chunk.text });
+                        }}>
+                          Explain This Better
+                        </button>
+                      ) : null}
                     </div>
-                    <p>{supportLoadingChunkId === chunk.id ? 'Thinking through this context...' : contextTexts[chunk.id] ?? 'Context will appear here in a moment.'}</p>
-                    <button type="button" className="secondary-button compact-button" onClick={() => {
-                      if (speakingChunkId === `${chunk.id}-explanation`) {
-                        activeAudioRef.current?.pause();
-                        activeAudioRef.current = null;
-                        setSpeakingChunkId(null);
-                      }
-                      onExplainAgain?.({ chunkId: chunk.id, text: chunk.text });
-                    }}>
-                      Explain This Better
-                    </button>
-                  </div>
-                ) : null}
+                  );
+                })() : null}
 
                 <div className="reading-part-footer">
                   <button

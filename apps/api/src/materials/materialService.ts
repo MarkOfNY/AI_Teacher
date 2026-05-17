@@ -1,4 +1,4 @@
-import type { AiProvider, ScoreResult } from '@ai-teacher/shared';
+import type { AiProvider, ReadingLevel, ScoreResult } from '@ai-teacher/shared';
 import type { AiErrorLogInput } from '../ai/aiErrorLogger';
 import { logAiError } from '../ai/aiErrorLogger';
 import { aiTeachingService } from '../ai/aiTeachingService';
@@ -132,10 +132,18 @@ export const materialService = {
   },
 
   async getMaterial(materialId: string) {
-    return prisma.material.findUnique({
+    const raw = await prisma.material.findUnique({
       where: { id: materialId },
       include: { chunks: { orderBy: { index: 'asc' } } }
     });
+    if (!raw) return null;
+    return {
+      ...raw,
+      chunks: raw.chunks.map((chunk) => ({
+        ...chunk,
+        simplifications: JSON.parse(chunk.simplifications || '{}') as Partial<Record<ReadingLevel, string[]>>
+      }))
+    };
   },
 
   async updateMaterial(input: { materialId: string; title: string; originalText: string }) {
@@ -208,9 +216,15 @@ export const materialService = {
     for (const chunk of nextChunks) {
       const existing = existingByIndex.get(chunk.index);
       if (existing) {
+        const textChanged = existing.text !== chunk.text;
         await prisma.materialChunk.update({
           where: { id: existing.id },
-          data: { text: chunk.text, status: 'notStarted', bestScore: null }
+          data: {
+            text: chunk.text,
+            status: 'notStarted',
+            bestScore: null,
+            ...(textChanged ? { simplifications: '{}' } : {})
+          }
         });
       } else {
         await prisma.materialChunk.create({
@@ -228,6 +242,63 @@ export const materialService = {
       where: { id: material.id },
       include: { chunks: { orderBy: { index: 'asc' } } }
     });
+  },
+
+  async generateSimplifications(input: { materialId: string; readingLevel: Exclude<ReadingLevel, 'original'>; provider?: AiProvider }) {
+    const material = await prisma.material.findUnique({
+      where: { id: input.materialId },
+      include: { chunks: { orderBy: { index: 'asc' } } }
+    });
+    if (!material) throw new Error('Material not found');
+
+    const provider = input.provider ?? 'qwen';
+    const TARGET = 5;
+    const MAX_TRIES = 4;
+    const THRESHOLD = 90;
+
+    for (const chunk of material.chunks) {
+      const stored = JSON.parse(chunk.simplifications || '{}') as Partial<Record<ReadingLevel, string[]>>;
+      const existing = stored[input.readingLevel] ?? [];
+      if (existing.length >= TARGET) continue;
+
+      const versions = [...existing];
+      while (versions.length < TARGET) {
+        let best = '';
+        let bestScore = -1;
+        for (let attempt = 0; attempt < MAX_TRIES; attempt++) {
+          const text = await aiTeachingService.simplifyText({ provider, text: chunk.text, readingLevel: input.readingLevel });
+          try {
+            const result = await aiTeachingService.scoreParaphrase({ provider, referenceText: chunk.text, transcript: text, threshold: THRESHOLD });
+            if (result.score >= THRESHOLD) { best = text; break; }
+            if (result.score > bestScore) { bestScore = result.score; best = text; }
+          } catch {
+            if (!best) best = text;
+            break;
+          }
+        }
+        if (best) versions.push(best);
+        else break;
+      }
+
+      if (versions.length > existing.length) {
+        await prisma.materialChunk.update({
+          where: { id: chunk.id },
+          data: { simplifications: JSON.stringify({ ...stored, [input.readingLevel]: versions }) }
+        });
+      }
+    }
+
+    const refreshed = await prisma.material.findUniqueOrThrow({
+      where: { id: input.materialId },
+      include: { chunks: { orderBy: { index: 'asc' } } }
+    });
+    return {
+      ...refreshed,
+      chunks: refreshed.chunks.map((chunk) => ({
+        ...chunk,
+        simplifications: JSON.parse(chunk.simplifications || '{}') as Partial<Record<ReadingLevel, string[]>>
+      }))
+    };
   },
 
   async suggestReadingParts(materialId: string, provider: AiProvider = 'qwen') {

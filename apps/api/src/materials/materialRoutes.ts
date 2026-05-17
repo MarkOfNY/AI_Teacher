@@ -105,6 +105,11 @@ const SuggestReadingPartsSchema = z.object({
   provider: z.enum(['qwen', 'deepseek', 'openai', 'disabled', 'browserTts']).default('qwen')
 });
 
+const GenerateSimplificationsSchema = z.object({
+  readingLevel: z.enum(['verySimple', 'simple', 'middleSchool']),
+  provider: z.enum(['qwen', 'deepseek', 'openai']).default('qwen')
+});
+
 export interface MaterialServiceLike {
   createMaterial(input: z.infer<typeof CreateMaterialSchema>): Promise<unknown>;
   listMaterials(userProfileId: string): Promise<unknown>;
@@ -113,6 +118,7 @@ export interface MaterialServiceLike {
   deleteMaterial(materialId: string): Promise<void>;
   updateReadingParts(input: { materialId: string; readingPartCount: number }): Promise<unknown>;
   suggestReadingParts(materialId: string, provider?: AiProvider): Promise<{ readingPartCount: number }>;
+  generateSimplifications(input: z.infer<typeof GenerateSimplificationsSchema> & { materialId: string }): Promise<unknown>;
   submitParaphraseAttempt(input: { materialId: string } & z.infer<typeof SubmitAttemptSchema>): Promise<unknown>;
 }
 
@@ -257,6 +263,24 @@ export function createMaterialRouter(service: MaterialServiceLike = materialServ
 
       const suggestion = await service.suggestReadingParts(req.params.materialId, parsed.data.provider);
       res.json(suggestion);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post('/:materialId/simplifications', async (req, res, next) => {
+    try {
+      const parsed = GenerateSimplificationsSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: 'Invalid simplifications input' });
+        return;
+      }
+
+      const result = await service.generateSimplifications({
+        materialId: req.params.materialId,
+        ...parsed.data
+      });
+      res.json(result);
     } catch (error) {
       next(error);
     }

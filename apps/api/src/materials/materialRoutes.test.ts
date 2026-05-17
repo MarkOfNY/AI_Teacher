@@ -45,6 +45,7 @@ function testApp(overrides: Partial<Parameters<typeof createMaterialRouter>[0]> 
         bestScore: null
       }))
     }),
+    generateSimplifications: async () => material,
     suggestReadingParts: async () => ({ readingPartCount: 2 }),
     submitParaphraseAttempt: async () => ({
       score: 91,

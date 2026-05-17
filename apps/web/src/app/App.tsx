@@ -7,6 +7,7 @@ import {
   createUserSession,
   createMaterial,
   deleteMaterial,
+  generateSimplifications,
   getMaterial,
   listMaterials,
   type MaterialDetailResponse,
@@ -90,6 +91,7 @@ export function App() {
   const [finalScore, setFinalScore] = useState<ScoreResponse | null>(null);
   const [isScoring, setIsScoring] = useState(false);
   const [isScoringFinal, setIsScoringFinal] = useState(false);
+  const [isSimplificationsLoading, setIsSimplificationsLoading] = useState(false);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [isSavingRouting, setIsSavingRouting] = useState(false);
   const [simplifiedTexts, setSimplifiedTexts] = useState<Record<string, string>>({});
@@ -324,7 +326,13 @@ export function App() {
       setSimplifiedTexts({});
       setContextTexts({});
       setDefinitionTexts({});
+      setIsSimplificationsLoading(false);
       setStatusMessage('Preparing audio...');
+
+      const needsSimplifications = material.chunks.some(
+        (chunk) => (chunk.simplifications?.simple?.length ?? 0) < 5
+      );
+      if (needsSimplifications) triggerSimplificationGeneration(material.id, 'simple');
       // isMaterialLoading stays true here — cleared by handleFirstAudioCached once first chunk audio is ready
     } catch {
       setStatusMessage('Could not open the lesson. Check that the API is running.');
@@ -338,6 +346,21 @@ export function App() {
     setIsMaterialLoading(false);
     setStatusMessage(null);
   }, []);
+
+  function triggerSimplificationGeneration(materialId: string, readingLevel: ReadingLevel) {
+    const prefs = profile?.routingPreferences ?? DEFAULT_ROUTING_PREFERENCES;
+    const provider = prefs.simplifyText === 'disabled' || prefs.simplifyText === 'browserTts'
+      ? 'qwen'
+      : prefs.simplifyText;
+    if (readingLevel === 'original') return;
+    setIsSimplificationsLoading(true);
+    void generateSimplifications(materialId, readingLevel as Exclude<ReadingLevel, 'original'>, provider)
+      .then((updated) => {
+        setSelectedMaterial((current) => current?.id === materialId ? updated : current);
+      })
+      .catch(() => undefined)
+      .finally(() => setIsSimplificationsLoading(false));
+  }
 
   async function handleSubmitParaphrase(input: { chunkId: string; transcript: string; referenceText: string }) {
     if (!selectedMaterial) {
@@ -440,6 +463,14 @@ export function App() {
       },
       onSuccess: (text) => setContextTexts((currentTexts) => ({ ...currentTexts, [input.chunkId]: text }))
     });
+  }
+
+  function handleReadingLevelChange(level: ReadingLevel) {
+    if (!selectedMaterial || level === 'original') return;
+    const needsSimplifications = selectedMaterial.chunks.some(
+      (chunk) => (chunk.simplifications?.[level]?.length ?? 0) < 5
+    );
+    if (needsSimplifications) triggerSimplificationGeneration(selectedMaterial.id, level);
   }
 
   async function handleChangeReadingPartCount(readingPartCount: number) {
@@ -638,6 +669,8 @@ export function App() {
                 onSuggestReadingParts={() => void handleSuggestReadingParts()}
                 onSubmitParaphrase={(input) => void handleSubmitParaphrase(input)}
                 onSubmitFinalSummary={(transcript) => void handleSubmitFinalSummary(transcript)}
+                isSimplificationsLoading={isSimplificationsLoading}
+                onReadingLevelChange={handleReadingLevelChange}
                 onSimplify={handleSimplify}
                 onExplainContext={handleExplainContext}
                 onExplainAgain={handleExplainAgain}
