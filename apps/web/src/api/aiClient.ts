@@ -25,7 +25,7 @@ export function explainContext(input: { text: string; provider: AiProvider }) {
   return postJson<{ explanation: string; provider: AiProvider }>('/ai/explain-context', input, 'The app is having difficulty explaining context.');
 }
 
-export function explainGaps(input: { text: string; missed: string[]; provider: AiProvider }) {
+export function explainGaps(input: { text: string; missed: string[]; attempt?: number; provider: AiProvider }) {
   return postJson<{ explanation: string; provider: AiProvider }>('/ai/explain-gaps', input, 'The app is having difficulty explaining missed ideas.');
 }
 

@@ -20,7 +20,7 @@ export const aiTeachingService = {
     return router.explainContext(input);
   },
 
-  explainGaps(input: { provider: AiProvider; text: string; missed: string[] }) {
+  explainGaps(input: { provider: AiProvider; text: string; missed: string[]; attempt?: number }) {
     return router.explainGaps(input);
   },
 

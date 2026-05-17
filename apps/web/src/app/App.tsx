@@ -94,6 +94,7 @@ export function App() {
   const [isSavingRouting, setIsSavingRouting] = useState(false);
   const [simplifiedTexts, setSimplifiedTexts] = useState<Record<string, string>>({});
   const [contextTexts, setContextTexts] = useState<Record<string, string>>({});
+  const [explainAgainCounts, setExplainAgainCounts] = useState<Record<string, number>>({});
   const [definitionTexts, setDefinitionTexts] = useState<Record<string, string>>({});
   const [isSupportLoading, setIsSupportLoading] = useState(false);
   const [supportLoadingChunkId, setSupportLoadingChunkId] = useState<string | null>(null);
@@ -427,11 +428,13 @@ export function App() {
   }
 
   function handleExplainAgain(input: { chunkId: string; text: string }) {
+    const attempt = (explainAgainCounts[input.chunkId] ?? 0) + 1;
+    setExplainAgainCounts((current) => ({ ...current, [input.chunkId]: attempt }));
     void runSupportRequest({
       chunkId: input.chunkId,
       capability: 'generateGapAwareExplanation',
       action: async (provider) => {
-        const response = await explainGaps({ text: input.text, missed: [], provider });
+        const response = await explainGaps({ text: input.text, missed: [], attempt, provider });
         return response.explanation;
       },
       onSuccess: (text) => setContextTexts((currentTexts) => ({ ...currentTexts, [input.chunkId]: text }))

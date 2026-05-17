@@ -89,8 +89,15 @@ export function buildProviderClient(config: ProviderConfig, apiKey: string) {
     async explainContext(input: { text: string }) {
       return send(`Explain the background context and why this text matters. Keep it simple.\n\n${input.text}`);
     },
-    async explainGaps(input: { text: string; missed: string[] }) {
-      return send(`Re-explain the following content using clearer, simpler language. Stay grounded in the actual events, facts, and details from the text — do not replace them with unrelated analogies. Make the cause-and-effect or key relationships more obvious. Respond with only the explanation itself, no introduction or preamble.\n\nText:\n${input.text}`);
+    async explainGaps(input: { text: string; missed: string[]; attempt?: number }) {
+      const strategy = ((input.attempt ?? 1) - 1) % 4;
+      const angle = [
+        'Focus on cause and effect: what caused this situation and what resulted from it. Stay grounded in the actual events and details.',
+        'Break it down into its most important points one at a time, in the order a student needs to understand them. Stay grounded in the actual events and details.',
+        'Identify the single most important idea first, then show how every other detail in the text connects to it. Stay grounded in the actual events and details.',
+        'Walk through what happened step by step and explain why each step led to the next. Stay grounded in the actual events and details.'
+      ][strategy];
+      return send(`Re-explain the following content using clearer, simpler language. ${angle} Respond with only the explanation itself, no introduction or preamble.\n\nText:\n${input.text}`);
     },
     async defineVocabulary(input: { term: string; contextText: string }) {
       return send(`Define the word or phrase "${input.term}" for a student. Use the surrounding text to choose the right meaning. Keep the answer short and concrete.\n\nSurrounding text:\n${input.contextText}`);

@@ -21,6 +21,7 @@ const ExplainContextSchema = z.object({
 const ExplainGapsSchema = z.object({
   text: z.string().min(1),
   missed: z.array(z.string()).default([]),
+  attempt: z.number().int().min(1).optional(),
   provider: ProviderSchema
 });
 
@@ -33,7 +34,7 @@ const DefineVocabularySchema = z.object({
 export interface AiTeachingServiceLike {
   simplifyText(input: { provider: AiProvider; text: string; readingLevel: ReadingLevel }): Promise<string>;
   explainContext(input: { provider: AiProvider; text: string }): Promise<string>;
-  explainGaps(input: { provider: AiProvider; text: string; missed: string[] }): Promise<string>;
+  explainGaps(input: { provider: AiProvider; text: string; missed: string[]; attempt?: number }): Promise<string>;
   defineVocabulary(input: { provider: AiProvider; term: string; contextText: string }): Promise<string>;
 }
 

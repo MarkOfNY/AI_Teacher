@@ -9,7 +9,7 @@ interface SimplifyInput {
 interface ProviderClient {
   simplifyText?(input: { text: string; readingLevel: ReadingLevel }): Promise<string>;
   explainContext?(input: { text: string }): Promise<string>;
-  explainGaps?(input: { text: string; missed: string[] }): Promise<string>;
+  explainGaps?(input: { text: string; missed: string[]; attempt?: number }): Promise<string>;
   defineVocabulary?(input: { term: string; contextText: string }): Promise<string>;
   suggestReadingPartCount?(input: { text: string }): Promise<number>;
   scoreParaphrase?(input: { referenceText: string; transcript: string; threshold: number }): Promise<ScoreResult>;
@@ -36,10 +36,10 @@ export function createAiRouter(clients: { qwen: ProviderClient; deepseek: Provid
       if (!client.explainContext) throw new Error(`Provider ${input.provider} does not support explainContext`);
       return client.explainContext({ text: input.text });
     },
-    async explainGaps(input: { provider: AiProvider; text: string; missed: string[] }) {
+    async explainGaps(input: { provider: AiProvider; text: string; missed: string[]; attempt?: number }) {
       const client = clientFor(input.provider, 'explainGaps');
       if (!client.explainGaps) throw new Error(`Provider ${input.provider} does not support explainGaps`);
-      return client.explainGaps({ text: input.text, missed: input.missed });
+      return client.explainGaps({ text: input.text, missed: input.missed, attempt: input.attempt });
     },
     async defineVocabulary(input: { provider: AiProvider; term: string; contextText: string }) {
       const client = clientFor(input.provider, 'defineVocabulary');
