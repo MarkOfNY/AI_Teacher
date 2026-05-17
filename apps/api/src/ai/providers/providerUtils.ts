@@ -87,7 +87,7 @@ export function buildProviderClient(config: ProviderConfig, apiKey: string) {
       return send(`Rewrite this for reading level "${input.readingLevel}". Keep the important ideas.\n\n${input.text}`);
     },
     async explainContext(input: { text: string }) {
-      return send(`Explain the background context and why this text matters. Keep it simple.\n\n${input.text}`);
+      return send(`Explain what this text means and why it matters. Keep it simple. Do not open with phrases identifying the document or source — the student already knows what they are reading. Start directly with the explanation.\n\n${input.text}`);
     },
     async explainGaps(input: { text: string; missed: string[]; attempt?: number }) {
       const strategy = ((input.attempt ?? 1) - 1) % 4;

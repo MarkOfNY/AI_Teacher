@@ -36,11 +36,26 @@ function suggestedPartCountForText(text: string) {
   );
 }
 
+const MIN_STANDALONE_PARAGRAPH_WORDS = 5;
+
 function splitParagraphs(text: string) {
-  return text
+  const raw = text
     .split(/\n\s*\n/g)
     .map((paragraph) => paragraph.replace(/\s+/g, ' ').trim())
     .filter(Boolean);
+
+  // Merge fragments that are too short to stand alone (e.g. lone section numbers)
+  // into the paragraph that follows them.
+  const merged: string[] = [];
+  for (let i = 0; i < raw.length; i++) {
+    if (countWords(raw[i]) < MIN_STANDALONE_PARAGRAPH_WORDS && i + 1 < raw.length) {
+      merged.push(`${raw[i]} ${raw[i + 1]}`);
+      i++;
+    } else {
+      merged.push(raw[i]);
+    }
+  }
+  return merged;
 }
 
 function reindex(chunks: string[]): TextChunkDraft[] {
