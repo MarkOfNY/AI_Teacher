@@ -28,13 +28,13 @@ describe('LessonReader', () => {
     expect(screen.queryByRole('button', { name: 'Clear' })).not.toBeInTheDocument();
   });
 
-  it('lets the student move through reading levels with easier and harder arrow buttons', async () => {
+  it('lets the student change reading levels by clicking the level buttons', async () => {
     const simplify = vi.fn();
     render(<LessonReader title="History" chunks={chunks} onSimplify={simplify} />);
 
     expect(screen.getByRole('button', { name: 'Simple' })).toHaveAttribute('aria-pressed', 'true');
 
-    await userEvent.click(screen.getByRole('button', { name: 'Harder reading level' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Intermediate' }));
 
     expect(screen.getByRole('button', { name: 'Intermediate' })).toHaveAttribute('aria-pressed', 'true');
     expect(simplify).toHaveBeenCalledWith({ chunkId: 'c1', text: 'First chunk has liberty.', readingLevel: 'middleSchool' });
@@ -44,7 +44,7 @@ describe('LessonReader', () => {
       expect(screen.queryByRole('dialog', { name: 'Processing lesson changes' })).not.toBeInTheDocument();
     });
 
-    await userEvent.click(screen.getByRole('button', { name: 'Easier reading level' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Simple' }));
 
     expect(screen.getByRole('button', { name: 'Simple' })).toHaveAttribute('aria-pressed', 'true');
   });
@@ -127,7 +127,7 @@ describe('LessonReader', () => {
     expect(screen.getByRole('dialog', { name: 'Processing lesson changes' })).toHaveTextContent('Processing...');
     expect(screen.getByRole('region', { name: 'Lesson reader content' })).toHaveAttribute('aria-busy', 'true');
     expect(screen.getByRole('button', { name: 'Suggest Reading Parts' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Harder reading level' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Intermediate' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Test Reading Part 1' })).toBeDisabled();
   });
 

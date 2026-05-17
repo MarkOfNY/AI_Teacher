@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.trim() || 'http://localhost:3001';
-import { ChevronLeft, ChevronRight, Lightbulb, Mic, Square, Volume2, X } from 'lucide-react';
+import { Lightbulb, Mic, Square, Volume2, X } from 'lucide-react';
 import type { MaterialChunk, ReadingLevel } from '@ai-teacher/shared';
 import { SelectableText } from './SelectableText';
 
@@ -128,6 +128,8 @@ export function LessonReader({
   const activeAudioRef = useRef<HTMLAudioElement | null>(null);
   const audioCacheRef = useRef<Map<string, string>>(new Map());
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const silenceTimerRef = useRef<number | null>(null);
+  const userStoppedRef = useRef(false);
   const contextPopoverRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const contextButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const definitionPopoverRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -167,6 +169,7 @@ export function LessonReader({
     audioCacheRef.current.forEach((url) => URL.revokeObjectURL(url));
     audioCacheRef.current.clear();
     recognitionRef.current?.stop();
+    if (silenceTimerRef.current !== null) window.clearTimeout(silenceTimerRef.current);
   }, []);
 
   useEffect(() => {
@@ -273,15 +276,6 @@ export function LessonReader({
     });
   }
 
-  function moveReadingLevel(direction: -1 | 1) {
-    const currentIndex = readingLevelOptions.findIndex((option) => option.value === readingLevel);
-    const nextIndex = Math.min(readingLevelOptions.length - 1, Math.max(0, currentIndex + direction));
-    const nextLevel = readingLevelOptions[nextIndex]?.value;
-    if (nextLevel && nextLevel !== readingLevel) {
-      handleReadingLevelChange(nextLevel);
-    }
-  }
-
   function setReadingPartMode(chunk: MaterialChunk, mode: 'original' | 'simplified') {
     if (wholeReaderProcessing) return;
     if (mode === 'simplified' && !simplifiedTexts[chunk.id]) {
@@ -365,7 +359,16 @@ export function LessonReader({
   }
 
   function toggleDictation(chunk: MaterialChunk) {
+    function clearSilenceTimer() {
+      if (silenceTimerRef.current !== null) {
+        window.clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
+      }
+    }
+
     if (activeDictationChunkId === chunk.id) {
+      userStoppedRef.current = true;
+      clearSilenceTimer();
       recognitionRef.current?.stop();
       recognitionRef.current = null;
       setActiveDictationChunkId(null);
@@ -379,6 +382,8 @@ export function LessonReader({
     }
 
     if (recognitionRef.current) {
+      userStoppedRef.current = true;
+      clearSilenceTimer();
       recognitionRef.current.stop();
       recognitionRef.current = null;
       setActiveDictationChunkId(null);
@@ -400,7 +405,16 @@ export function LessonReader({
     recognition.interimResults = false;
     recognition.lang = 'en-US';
 
+    function resetSilenceTimer() {
+      if (silenceTimerRef.current !== null) window.clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = window.setTimeout(() => {
+        userStoppedRef.current = true;
+        recognition.stop();
+      }, 30000);
+    }
+
     recognition.onresult = (event) => {
+      resetSilenceTimer();
       const newTranscript = Array.from(event.results)
         .map((result) => result[0]?.transcript ?? '')
         .join(' ')
@@ -412,6 +426,17 @@ export function LessonReader({
 
     recognition.onend = () => {
       if (recognitionRef.current === recognition) {
+        if (!userStoppedRef.current) {
+          // Browser stopped due to silence — restart to keep mic active
+          try {
+            recognition.start();
+            resetSilenceTimer();
+            return;
+          } catch {
+            // restart failed, fall through to cleanup
+          }
+        }
+        clearSilenceTimer();
         recognitionRef.current = null;
         setActiveDictationChunkId(null);
         setDictationMessages((current) => {
@@ -424,6 +449,8 @@ export function LessonReader({
     };
 
     recognition.onerror = (event) => {
+      clearSilenceTimer();
+      userStoppedRef.current = true;
       recognitionRef.current = null;
       setActiveDictationChunkId(null);
       setDictationMessages((current) => ({
@@ -432,12 +459,14 @@ export function LessonReader({
       }));
     };
 
+    userStoppedRef.current = false;
     recognitionRef.current = recognition;
     setActiveDictationChunkId(chunk.id);
     setDictationMessages((current) => ({ ...current, [chunk.id]: 'Listening...' }));
 
     requestMicrophonePermission()
       .catch(() => {
+        clearSilenceTimer();
         recognitionRef.current = null;
         setActiveDictationChunkId(null);
         setDictationMessages((current) => ({
@@ -446,7 +475,10 @@ export function LessonReader({
         }));
         throw new Error('Microphone permission was not granted.');
       })
-      .then(() => recognition.start())
+      .then(() => {
+        recognition.start();
+        resetSilenceTimer();
+      })
       .catch(() => undefined);
   }
 
@@ -490,15 +522,6 @@ export function LessonReader({
           <div className="reading-level-segment" role="group" aria-label="Reading level">
             <span>Reading level</span>
             <div className="reading-level-bar">
-              <button
-                type="button"
-                className="level-arrow"
-                aria-label="Easier reading level"
-                disabled={wholeReaderProcessing || readingLevel === readingLevelOptions[0].value}
-                onClick={() => moveReadingLevel(-1)}
-              >
-                <ChevronLeft size={16} aria-hidden="true" />
-              </button>
               {readingLevelOptions.map((option) => (
                 <button
                   key={option.value}
@@ -511,15 +534,6 @@ export function LessonReader({
                   {option.label}
                 </button>
               ))}
-              <button
-                type="button"
-                className="level-arrow"
-                aria-label="Harder reading level"
-                disabled={wholeReaderProcessing || readingLevel === readingLevelOptions[readingLevelOptions.length - 1].value}
-                onClick={() => moveReadingLevel(1)}
-              >
-                <ChevronRight size={16} aria-hidden="true" />
-              </button>
             </div>
           </div>
         </div>
@@ -702,7 +716,7 @@ export function LessonReader({
                       </button>
                     </div>
                     <p>{supportLoadingChunkId === chunk.id ? 'Thinking through this context...' : contextTexts[chunk.id] ?? 'Context will appear here in a moment.'}</p>
-                    <button type="button" onClick={() => onExplainAgain?.({ text: chunk.text, missed: [] })}>
+                    <button type="button" className="secondary-button compact-button" onClick={() => onExplainAgain?.({ text: chunk.text, missed: [] })}>
                       Explain This Better
                     </button>
                   </div>
