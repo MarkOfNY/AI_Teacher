@@ -1187,6 +1187,13 @@ button:disabled {
   margin-bottom: 8px;
 }
 
+.context-popover-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
 .icon-button {
   display: inline-grid;
   width: 30px;
