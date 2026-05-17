@@ -661,7 +661,7 @@ export function App() {
               onCancelEdit={() => setEditingMaterial(null)}
               onCreateMaterial={(input) => void handleCreateMaterial(input)}
               onUpdateMaterial={(input) => void handleUpdateMaterial(input)}
-              showClassroomImport={Boolean(googleClientId)}
+
             />
             <ParentDashboard
               materials={materials}
