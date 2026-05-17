@@ -83,8 +83,9 @@ export function buildProviderClient(config: ProviderConfig, apiKey: string) {
   const send = (prompt: string) => chat(config, apiKey, prompt);
 
   return {
-    async simplifyText(input: { text: string; readingLevel: ReadingLevel }) {
-      return send(`Rewrite this for reading level "${input.readingLevel}". Keep the important ideas.\n\n${input.text}`);
+    async simplifyText(input: { text: string; readingLevel: ReadingLevel; hint?: string }) {
+      const hintClause = input.hint ? ` ${input.hint}` : '';
+      return send(`Rewrite this for reading level "${input.readingLevel}". Keep the important ideas.${hintClause}\n\n${input.text}`);
     },
     async explainContext(input: { text: string }) {
       return send(`Explain what this means and why it matters. Keep it simple. Never begin with meta-commentary about the text itself — do not use phrases like "This text says", "This text talks about", "This text lists", "This passage explains", "The text states", or any variation. Do not identify the document or source. Jump straight into the explanation as if you are a tutor speaking directly to a student.\n\n${input.text}`);

@@ -4,10 +4,11 @@ interface SimplifyInput {
   provider: AiProvider;
   text: string;
   readingLevel: ReadingLevel;
+  hint?: string;
 }
 
 interface ProviderClient {
-  simplifyText?(input: { text: string; readingLevel: ReadingLevel }): Promise<string>;
+  simplifyText?(input: { text: string; readingLevel: ReadingLevel; hint?: string }): Promise<string>;
   explainContext?(input: { text: string }): Promise<string>;
   explainGaps?(input: { text: string; missed: string[]; attempt?: number }): Promise<string>;
   defineVocabulary?(input: { term: string; contextText: string }): Promise<string>;
@@ -29,7 +30,7 @@ export function createAiRouter(clients: { qwen: ProviderClient; deepseek: Provid
     async simplifyText(input: SimplifyInput) {
       const client = clientFor(input.provider, 'simplifyText');
       if (!client.simplifyText) throw new Error(`Provider ${input.provider} does not support simplifyText`);
-      return client.simplifyText({ text: input.text, readingLevel: input.readingLevel });
+      return client.simplifyText({ text: input.text, readingLevel: input.readingLevel, hint: input.hint });
     },
     async explainContext(input: { provider: AiProvider; text: string }) {
       const client = clientFor(input.provider, 'explainContext');

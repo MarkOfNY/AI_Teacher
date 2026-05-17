@@ -159,6 +159,21 @@ export async function generateSimplifications(materialId: string, readingLevel: 
   return response.json() as Promise<MaterialDetailResponse>;
 }
 
+export interface ChunkSimplificationsResponse {
+  id: string;
+  simplifications: Partial<Record<ReadingLevel, string[]>>;
+}
+
+export async function generateChunkSimplifications(materialId: string, chunkId: string, readingLevel: Exclude<ReadingLevel, 'original'>, provider = 'qwen') {
+  const response = await fetch(`${API_BASE_URL}/materials/${materialId}/chunks/${chunkId}/simplifications`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ readingLevel, provider })
+  });
+  if (!response.ok) throw new Error('Unable to generate chunk simplifications.');
+  return response.json() as Promise<ChunkSimplificationsResponse>;
+}
+
 export async function submitParaphraseAttempt(input: SubmitParaphraseAttemptRequest) {
   const response = await fetch(`${API_BASE_URL}/materials/${input.materialId}/attempts`, {
     method: 'POST',

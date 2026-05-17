@@ -60,7 +60,7 @@ interface LessonReaderProps {
   isSupportLoading?: boolean;
   supportLoadingChunkId?: string | null;
   isReaderProcessing?: boolean;
-  isSimplificationsLoading?: boolean;
+  simplificationsProgress?: { ready: number; total: number } | null;
   onSimplify?: (input: { chunkId: string; text: string; readingLevel: ReadingLevel }) => void;
   onExplainContext?: (input: { chunkId: string; text: string }) => void;
   onExplainAgain?: (input: { chunkId: string; text: string }) => void;
@@ -109,7 +109,7 @@ export function LessonReader({
   isSupportLoading = false,
   supportLoadingChunkId = null,
   isReaderProcessing = false,
-  isSimplificationsLoading = false,
+  simplificationsProgress = null,
   onSimplify,
   onExplainContext,
   onExplainAgain,
@@ -550,8 +550,10 @@ export function LessonReader({
           </div>
         </div>
 
-        {isSimplificationsLoading && !wholeReaderProcessing ? (
-          <div className="setup-notice" role="status">Preparing simplified explanations in the background...</div>
+        {simplificationsProgress && !wholeReaderProcessing ? (
+          <div className="setup-notice" role="status">
+            Preparing explanations: {simplificationsProgress.ready} of {simplificationsProgress.total} reading parts ready...
+          </div>
         ) : null}
         {isSupportLoading && !openContextChunkId && !wholeReaderProcessing ? (
           <div className="setup-notice" role="status">Thinking through this part...</div>
@@ -805,7 +807,7 @@ export function LessonReader({
                           ? explainText
                           : (supportLoadingChunkId === chunk.id
                               ? 'Thinking through this explanation...'
-                              : explainText ?? (isSimplificationsLoading ? 'Generating simplified explanations...' : 'Explanation will appear here in a moment.'))}
+                              : explainText ?? (simplificationsProgress ? 'Generating simplified explanations...' : 'Explanation will appear here in a moment.'))}
                       </p>
                       {!hasStoredVersions ? (
                         <button type="button" className="secondary-button compact-button" onClick={() => {

@@ -238,10 +238,17 @@ export const materialService = {
       data: { status: 'notStarted', finalBestScore: null }
     });
 
-    return prisma.material.findUniqueOrThrow({
+    const raw = await prisma.material.findUniqueOrThrow({
       where: { id: material.id },
       include: { chunks: { orderBy: { index: 'asc' } } }
     });
+    return {
+      ...raw,
+      chunks: raw.chunks.map((chunk) => ({
+        ...chunk,
+        simplifications: JSON.parse(chunk.simplifications || '{}') as Partial<Record<ReadingLevel, string[]>>
+      }))
+    };
   },
 
   async generateSimplifications(input: { materialId: string; readingLevel: Exclude<ReadingLevel, 'original'>; provider?: AiProvider }) {
@@ -304,6 +311,44 @@ export const materialService = {
         simplifications: JSON.parse(chunk.simplifications || '{}') as Partial<Record<ReadingLevel, string[]>>
       }))
     };
+  },
+
+  async generateChunkSimplifications(input: { chunkId: string; materialId: string; readingLevel: Exclude<ReadingLevel, 'original'>; provider?: AiProvider }) {
+    const chunk = await prisma.materialChunk.findFirst({
+      where: { id: input.chunkId, materialId: input.materialId }
+    });
+    if (!chunk) throw new Error('Chunk not found');
+
+    const stored = JSON.parse(chunk.simplifications || '{}') as Partial<Record<ReadingLevel, string[]>>;
+    const existing = stored[input.readingLevel] ?? [];
+    const needed = Math.max(0, 5 - existing.length);
+    if (needed === 0) return { id: chunk.id, simplifications: stored };
+
+    const provider = input.provider ?? 'qwen';
+    const HINTS = [
+      undefined,
+      'Use very short, simple sentences.',
+      'Lead with the most important idea first.',
+      'Explain difficult words simply as you go.',
+      'Focus on the cause, effect, and significance.'
+    ] as const;
+
+    const newVersions = await Promise.all(
+      Array.from({ length: needed }, (_, i) => {
+        const hint = HINTS[(existing.length + i) % HINTS.length];
+        return aiTeachingService.simplifyText({ provider, text: chunk.text, readingLevel: input.readingLevel, hint }).catch(() => null);
+      })
+    );
+
+    const versions = [...existing, ...newVersions.filter((v): v is string => v !== null)];
+    const updated = { ...stored, [input.readingLevel]: versions };
+
+    await prisma.materialChunk.update({
+      where: { id: chunk.id },
+      data: { simplifications: JSON.stringify(updated) }
+    });
+
+    return { id: chunk.id, simplifications: updated };
   },
 
   async suggestReadingParts(materialId: string, provider: AiProvider = 'qwen') {

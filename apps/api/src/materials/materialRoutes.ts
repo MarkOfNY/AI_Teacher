@@ -119,6 +119,7 @@ export interface MaterialServiceLike {
   updateReadingParts(input: { materialId: string; readingPartCount: number }): Promise<unknown>;
   suggestReadingParts(materialId: string, provider?: AiProvider): Promise<{ readingPartCount: number }>;
   generateSimplifications(input: z.infer<typeof GenerateSimplificationsSchema> & { materialId: string }): Promise<unknown>;
+  generateChunkSimplifications(input: z.infer<typeof GenerateSimplificationsSchema> & { materialId: string; chunkId: string }): Promise<unknown>;
   submitParaphraseAttempt(input: { materialId: string } & z.infer<typeof SubmitAttemptSchema>): Promise<unknown>;
 }
 
@@ -278,6 +279,25 @@ export function createMaterialRouter(service: MaterialServiceLike = materialServ
 
       const result = await service.generateSimplifications({
         materialId: req.params.materialId,
+        ...parsed.data
+      });
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post('/:materialId/chunks/:chunkId/simplifications', async (req, res, next) => {
+    try {
+      const parsed = GenerateSimplificationsSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: 'Invalid simplifications input' });
+        return;
+      }
+
+      const result = await service.generateChunkSimplifications({
+        materialId: req.params.materialId,
+        chunkId: req.params.chunkId,
         ...parsed.data
       });
       res.json(result);
