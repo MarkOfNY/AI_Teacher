@@ -773,8 +773,6 @@ export function LessonReader({
                       <div className="summary-input-wrap">
                         <textarea
                           value={transcript}
-                          onPaste={(event) => event.preventDefault()}
-                          onDrop={(event) => event.preventDefault()}
                           onChange={(event) => setTranscripts((current) => ({ ...current, [chunk.id]: event.target.value }))}
                           placeholder="Type the idea in your own words."
                         />
