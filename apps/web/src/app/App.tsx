@@ -107,6 +107,7 @@ export function App() {
   const [activeWorkspace, setActiveWorkspace] = useState<'take' | 'manage' | 'settings'>('take');
   const [editingMaterial, setEditingMaterial] = useState<{ id: string; title: string; originalText: string } | null>(null);
   const suggestionsCache = useRef(new Map<string, number>());
+  const simplificationAbortRef = useRef<{ aborted: boolean }>({ aborted: false });
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim();
 
   useEffect(() => {
@@ -328,6 +329,10 @@ export function App() {
       setDefinitionTexts({});
       setSimplificationsProgress(null);
       setStatusMessage('Preparing audio...');
+      simplificationAbortRef.current.aborted = true;
+      const abort = { aborted: false };
+      simplificationAbortRef.current = abort;
+
       void (async () => {
         const levels = ['simple', 'verySimple', 'middleSchool'] as const;
         const levelLabels: Record<typeof levels[number], string> = {
@@ -347,29 +352,33 @@ export function App() {
         let ready = 0;
 
         for (const { level, chunks } of levelChunks) {
+          if (abort.aborted) break;
           if (chunks.length === 0) continue;
           const levelLabel = levelLabels[level];
           setSimplificationsProgress({ ready, total, levelLabel });
           for (const chunk of chunks) {
+            if (abort.aborted) break;
             try {
               const result = await generateChunkSimplifications(materialId, chunk.id, level, provider);
-              setSelectedMaterial((current) => {
-                if (!current || current.id !== materialId) return current;
-                return {
-                  ...current,
-                  chunks: current.chunks.map((c) =>
-                    c.id === chunk.id ? { ...c, simplifications: result.simplifications } : c
-                  )
-                };
-              });
+              if (!abort.aborted) {
+                setSelectedMaterial((current) => {
+                  if (!current || current.id !== materialId) return current;
+                  return {
+                    ...current,
+                    chunks: current.chunks.map((c) =>
+                      c.id === chunk.id ? { ...c, simplifications: result.simplifications } : c
+                    )
+                  };
+                });
+              }
             } catch {
               // skip — lesson still works without pre-generated simplifications
             }
             ready++;
-            setSimplificationsProgress({ ready, total, levelLabel });
+            if (!abort.aborted) setSimplificationsProgress({ ready, total, levelLabel });
           }
         }
-        setSimplificationsProgress(null);
+        if (!abort.aborted) setSimplificationsProgress(null);
       })();
       // isMaterialLoading stays true here — cleared by handleFirstAudioCached once first chunk audio is ready
     } catch {
