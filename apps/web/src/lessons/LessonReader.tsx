@@ -27,10 +27,10 @@ interface SpeechRecognitionWindow extends Window {
 
 
 const readingLevelOptions: Array<{ value: ReadingLevel; label: string }> = [
-  { value: 'original', label: 'Original' },
   { value: 'verySimple', label: 'Very Simple' },
   { value: 'simple', label: 'Simple' },
-  { value: 'middleSchool', label: 'Intermediate' }
+  { value: 'middleSchool', label: 'Intermediate' },
+  { value: 'original', label: 'Original' }
 ];
 
 interface ParaphraseScore {
@@ -114,7 +114,7 @@ export function LessonReader({
   onDefineVocabulary,
   onFirstAudioCached
 }: LessonReaderProps) {
-  const [readingLevel, setReadingLevel] = useState<ReadingLevel>('simple');
+  const [readingLevel, setReadingLevel] = useState<ReadingLevel>('middleSchool');
   const [versionIndex, setVersionIndex] = useState<Record<string, number>>({});
   const [testChunkId, setTestChunkId] = useState<string | null>(null);
   const [transcripts, setTranscripts] = useState<Record<string, string>>({});

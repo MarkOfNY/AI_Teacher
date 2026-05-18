@@ -12,6 +12,7 @@ import {
   listMaterials,
   type MaterialDetailResponse,
   type ScoreResponse,
+  saveContextExplanation,
   submitParaphraseAttempt,
   suggestReadingParts,
   updateMaterial,
@@ -324,7 +325,13 @@ export function App() {
       setScore(null);
       setFinalScore(null);
 
-      setContextTexts({});
+      setContextTexts(
+        Object.fromEntries(
+          material.chunks
+            .filter((c) => c.contextExplanation)
+            .map((c) => [c.id, c.contextExplanation as string])
+        )
+      );
       setDefinitionTexts({});
       setSimplificationsProgress(null);
       setStatusMessage('Preparing audio...');
@@ -333,11 +340,11 @@ export function App() {
       simplificationAbortRef.current = abort;
 
       void (async () => {
-        const levels = ['simple', 'verySimple', 'middleSchool'] as const;
+        const levels = ['middleSchool', 'simple', 'verySimple'] as const;
         const levelLabels: Record<typeof levels[number], string> = {
+          middleSchool: 'Intermediate',
           simple: 'Simple',
-          verySimple: 'Very Simple',
-          middleSchool: 'Intermediate'
+          verySimple: 'Very Simple'
         };
         const provider = getSimplifyProvider();
         const materialId = material.id;
@@ -499,7 +506,12 @@ export function App() {
         const response = await explainContext({ text: input.text, provider });
         return response.explanation;
       },
-      onSuccess: (text) => setContextTexts((currentTexts) => ({ ...currentTexts, [input.chunkId]: text }))
+      onSuccess: (text) => {
+        setContextTexts((currentTexts) => ({ ...currentTexts, [input.chunkId]: text }));
+        if (selectedMaterial) {
+          void saveContextExplanation(selectedMaterial.id, input.chunkId, text);
+        }
+      }
     });
   }
 

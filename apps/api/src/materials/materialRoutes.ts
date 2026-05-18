@@ -225,6 +225,10 @@ const GenerateSimplificationsSchema = z.object({
   provider: z.enum(['qwen', 'deepseek', 'openai']).default('qwen')
 });
 
+const SaveContextExplanationSchema = z.object({
+  explanation: z.string().min(1)
+});
+
 export interface MaterialServiceLike {
   createMaterial(input: z.infer<typeof CreateMaterialSchema>): Promise<unknown>;
   listMaterials(userProfileId: string): Promise<unknown>;
@@ -235,6 +239,7 @@ export interface MaterialServiceLike {
   suggestReadingParts(materialId: string, provider?: AiProvider): Promise<{ readingPartCount: number }>;
   generateSimplifications(input: z.infer<typeof GenerateSimplificationsSchema> & { materialId: string }): Promise<unknown>;
   generateChunkSimplifications(input: z.infer<typeof GenerateSimplificationsSchema> & { materialId: string; chunkId: string }): Promise<unknown>;
+  saveContextExplanation(input: { chunkId: string; materialId: string; explanation: string }): Promise<void>;
   submitParaphraseAttempt(input: { materialId: string } & z.infer<typeof SubmitAttemptSchema>): Promise<unknown>;
 }
 
@@ -416,6 +421,25 @@ export function createMaterialRouter(service: MaterialServiceLike = materialServ
         ...parsed.data
       });
       res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.patch('/:materialId/chunks/:chunkId/context-explanation', async (req, res, next) => {
+    try {
+      const parsed = SaveContextExplanationSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: 'Invalid context explanation input' });
+        return;
+      }
+
+      await service.saveContextExplanation({
+        materialId: req.params.materialId,
+        chunkId: req.params.chunkId,
+        explanation: parsed.data.explanation
+      });
+      res.status(204).send();
     } catch (error) {
       next(error);
     }

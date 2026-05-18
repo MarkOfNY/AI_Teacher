@@ -46,15 +46,16 @@ model Material {
 }
 
 model MaterialChunk {
-  id              String              @id @default(cuid())
-  materialId      String
-  index           Int
-  text            String
-  status          String              @default("notStarted")
-  bestScore       Int?
-  simplifications String              @default("{}")
-  material        Material            @relation(fields: [materialId], references: [id])
-  attempts        ParaphraseAttempt[]
+  id                  String              @id @default(cuid())
+  materialId          String
+  index               Int
+  text                String
+  status              String              @default("notStarted")
+  bestScore           Int?
+  simplifications     String              @default("{}")
+  contextExplanation  String?
+  material            Material            @relation(fields: [materialId], references: [id])
+  attempts            ParaphraseAttempt[]
 
   @@unique([materialId, index])
 }

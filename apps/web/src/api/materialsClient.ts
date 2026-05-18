@@ -10,6 +10,7 @@ export interface MaterialChunkResponse {
   status: 'notStarted' | 'inProgress' | 'mastered';
   bestScore: number | null;
   simplifications?: Partial<Record<ReadingLevel, string[]>>;
+  contextExplanation?: string | null;
 }
 
 export interface UserSession {
@@ -172,6 +173,14 @@ export async function generateChunkSimplifications(materialId: string, chunkId: 
   });
   if (!response.ok) throw new Error('Unable to generate chunk simplifications.');
   return response.json() as Promise<ChunkSimplificationsResponse>;
+}
+
+export async function saveContextExplanation(materialId: string, chunkId: string, explanation: string): Promise<void> {
+  await fetch(`${API_BASE_URL}/materials/${materialId}/chunks/${chunkId}/context-explanation`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ explanation })
+  });
 }
 
 export async function submitParaphraseAttempt(input: SubmitParaphraseAttemptRequest) {

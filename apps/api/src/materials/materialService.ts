@@ -155,7 +155,8 @@ export const materialService = {
       ...raw,
       chunks: raw.chunks.map((chunk) => ({
         ...chunk,
-        simplifications: JSON.parse(chunk.simplifications || '{}') as Partial<Record<ReadingLevel, string[]>>
+        simplifications: JSON.parse(chunk.simplifications || '{}') as Partial<Record<ReadingLevel, string[]>>,
+        contextExplanation: chunk.contextExplanation ?? null
       }))
     };
   },
@@ -237,7 +238,7 @@ export const materialService = {
             text: chunk.text,
             status: 'notStarted',
             bestScore: null,
-            ...(textChanged ? { simplifications: '{}' } : {})
+            ...(textChanged ? { simplifications: '{}', contextExplanation: null } : {})
           }
         });
       } else {
@@ -260,7 +261,8 @@ export const materialService = {
       ...raw,
       chunks: raw.chunks.map((chunk) => ({
         ...chunk,
-        simplifications: JSON.parse(chunk.simplifications || '{}') as Partial<Record<ReadingLevel, string[]>>
+        simplifications: JSON.parse(chunk.simplifications || '{}') as Partial<Record<ReadingLevel, string[]>>,
+        contextExplanation: chunk.contextExplanation ?? null
       }))
     };
   },
@@ -322,7 +324,8 @@ export const materialService = {
       ...refreshed,
       chunks: refreshed.chunks.map((chunk) => ({
         ...chunk,
-        simplifications: JSON.parse(chunk.simplifications || '{}') as Partial<Record<ReadingLevel, string[]>>
+        simplifications: JSON.parse(chunk.simplifications || '{}') as Partial<Record<ReadingLevel, string[]>>,
+        contextExplanation: chunk.contextExplanation ?? null
       }))
     };
   },
@@ -378,6 +381,13 @@ export const materialService = {
     });
 
     return { id: chunk.id, simplifications: updated };
+  },
+
+  async saveContextExplanation(input: { chunkId: string; materialId: string; explanation: string }) {
+    await prisma.materialChunk.updateMany({
+      where: { id: input.chunkId, materialId: input.materialId },
+      data: { contextExplanation: input.explanation }
+    });
   },
 
   async suggestReadingParts(materialId: string, provider: AiProvider = 'qwen') {

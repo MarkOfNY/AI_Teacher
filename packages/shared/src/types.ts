@@ -24,6 +24,7 @@ export interface MaterialChunk {
   status: 'notStarted' | 'inProgress' | 'mastered';
   bestScore: number | null;
   simplifications?: Partial<Record<ReadingLevel, string[]>>;
+  contextExplanation?: string | null;
 }
 
 export interface ScoreRubric {
