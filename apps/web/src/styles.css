@@ -403,6 +403,8 @@ button:disabled {
 .rte-content {
   padding: 10px 11px;
   min-height: 180px;
+  max-height: 420px;
+  overflow-y: auto;
 }
 
 .rte-content .ProseMirror {

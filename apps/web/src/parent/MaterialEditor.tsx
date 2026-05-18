@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
+import { TextAlign } from '@tiptap/extension-text-align';
+import { Underline } from '@tiptap/extension-underline';
 import { FileText, Image } from 'lucide-react';
 import { extractFile } from '../api/materialsClient';
 import { ClassroomImporter } from '../classroom/ClassroomImporter';
@@ -54,7 +56,11 @@ export function MaterialEditor({ onCreateMaterial, onUpdateMaterial, onCancelEdi
   const isEditing = Boolean(editingMaterial);
 
   const editor = useEditor({
-    extensions: [StarterKit],
+    extensions: [
+      StarterKit,
+      Underline,
+      TextAlign.configure({ types: ['heading', 'paragraph'] })
+    ],
     content: '',
     onUpdate: ({ editor: e }) => {
       setIsEmpty(e.isEmpty);
