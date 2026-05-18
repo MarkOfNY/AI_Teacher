@@ -21,7 +21,7 @@ async function chatWithVision(config: ProviderConfig, apiKey: string, imageBase6
         role: 'user',
         content: [
           { type: 'image_url', image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
-          { type: 'text', text: 'Extract all text from this image exactly as it appears. Preserve paragraphs, headings, lists, and structure. Return only the extracted text with no commentary.' }
+          { type: 'text', text: 'Extract all text from this image and format it as clean HTML. Use <h1>, <h2>, <h3> for headings, <p> for paragraphs, <strong> for bold text, <em> for italic text, <ul>/<li> for bullet lists, <ol>/<li> for numbered lists. Preserve the document structure, hierarchy, and emphasis exactly as it appears. Return only the HTML content — no DOCTYPE, no <html> or <body> tags, no markdown code fences, no commentary.' }
         ]
       }],
       max_tokens: 4096,

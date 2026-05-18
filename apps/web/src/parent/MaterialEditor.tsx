@@ -40,6 +40,10 @@ function titleFromFileName(name: string) {
   return name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ').trim();
 }
 
+function cleanExtracted(content: string): string {
+  return content.replace(/^```(?:html?)?\n?/i, '').replace(/\n?```$/, '').trim();
+}
+
 export function MaterialEditor({ onCreateMaterial, onUpdateMaterial, onCancelEdit, editingMaterial = null, showClassroomImport = false }: MaterialEditorProps) {
   const [title, setTitle] = useState('');
   const [isEmpty, setIsEmpty] = useState(true);
@@ -82,7 +86,7 @@ export function MaterialEditor({ onCreateMaterial, onUpdateMaterial, onCancelEdi
         return;
       }
       setTitle((current) => current || titleFromFileName(file.name));
-      editor?.commands.setContent(text);
+      editor?.commands.setContent(cleanExtracted(text));
       setIsEmpty(false);
       setExtractState('idle');
     } catch (err) {
