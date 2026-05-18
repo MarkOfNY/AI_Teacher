@@ -137,10 +137,13 @@ export function createMaterialRouter(service: MaterialServiceLike = materialServ
       let text: string;
 
       if (file.mimetype === 'application/pdf') {
-        text = await extractTextFromPdf(file.buffer);
-        if (text.length < 20) {
-          // No selectable text — PDF is image-based. Send to Qwen VL.
+        const rawText = await extractTextFromPdf(file.buffer);
+        if (rawText.length < 20) {
+          // No selectable text — PDF is image-based. Send to Qwen VL for HTML extraction.
           text = await extractTextFromScannedPdf(file.buffer);
+        } else {
+          // Has selectable text — structure it as HTML to preserve document formatting.
+          text = await aiTeachingService.structureTextAsHtml({ provider: 'qwen', text: rawText });
         }
         if (text.length < 20) {
           res.status(422).json({ error: 'No readable text could be found in this PDF, even after AI analysis. The document may be blank or in an unsupported format.' });

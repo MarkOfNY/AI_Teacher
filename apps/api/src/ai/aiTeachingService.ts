@@ -38,5 +38,9 @@ export const aiTeachingService = {
 
   extractTextFromImage(input: { provider: AiProvider; imageBase64: string; mimeType: string }) {
     return router.extractTextFromImage(input);
+  },
+
+  structureTextAsHtml(input: { provider: AiProvider; text: string }) {
+    return router.structureTextAsHtml(input);
   }
 };

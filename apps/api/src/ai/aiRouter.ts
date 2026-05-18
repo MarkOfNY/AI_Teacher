@@ -16,6 +16,7 @@ interface ProviderClient {
   suggestReadingPartCount?(input: { text: string }): Promise<number>;
   scoreParaphrase?(input: { referenceText: string; transcript: string; threshold: number }): Promise<ScoreResult>;
   extractTextFromImage?(input: { imageBase64: string; mimeType: string }): Promise<string>;
+  structureTextAsHtml?(input: { text: string }): Promise<string>;
 }
 
 export function createAiRouter(clients: { qwen: ProviderClient; deepseek: ProviderClient; openai: ProviderClient }) {
@@ -66,6 +67,11 @@ export function createAiRouter(clients: { qwen: ProviderClient; deepseek: Provid
       const client = clientFor(input.provider, 'extractTextFromImage');
       if (!client.extractTextFromImage) throw new Error(`Provider ${input.provider} does not support extractTextFromImage`);
       return client.extractTextFromImage({ imageBase64: input.imageBase64, mimeType: input.mimeType });
+    },
+    async structureTextAsHtml(input: { provider: AiProvider; text: string }) {
+      const client = clientFor(input.provider, 'structureTextAsHtml');
+      if (!client.structureTextAsHtml) throw new Error(`Provider ${input.provider} does not support structureTextAsHtml`);
+      return client.structureTextAsHtml({ text: input.text });
     }
   };
 }

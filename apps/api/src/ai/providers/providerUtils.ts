@@ -100,6 +100,9 @@ export function buildProviderClient(config: ProviderConfig, apiKey: string) {
       ][strategy];
       return send(`Re-explain the following content using clearer, simpler language. ${angle} Respond with only the explanation itself, no introduction or preamble.\n\nText:\n${input.text}`);
     },
+    async structureTextAsHtml(input: { text: string }) {
+      return send(`Convert this plain text extracted from a PDF into clean, structured HTML. Infer structure from patterns: short standalone lines are headings (use <h2> or <h3>), prose paragraphs become <p>, lines starting with -, *, or • become <ul><li> items, numbered lines become <ol><li> items. Preserve all content exactly — do not summarize or omit anything. Return only the HTML — no DOCTYPE, no <html>/<body> tags, no commentary.\n\n${input.text}`, 0.1);
+    },
     async defineVocabulary(input: { term: string; contextText: string }) {
       return send(`Define the word or phrase "${input.term}" for a student. Use the surrounding text to choose the right meaning. Keep the answer short and concrete.\n\nSurrounding text:\n${input.contextText}`);
     },
