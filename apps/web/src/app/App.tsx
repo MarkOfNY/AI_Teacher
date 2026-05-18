@@ -329,9 +329,40 @@ export function App() {
       setSimplificationsProgress(null);
       setStatusMessage('Preparing audio...');
       void (async () => {
-        for (const level of ['simple', 'verySimple', 'middleSchool'] as const) {
-          await runSimplificationGeneration(material, level);
+        const levels = ['simple', 'verySimple', 'middleSchool'] as const;
+        const provider = getSimplifyProvider();
+        const materialId = material.id;
+        const levelChunks = levels.map((level) => ({
+          level,
+          chunks: material.chunks.filter((c) => (c.simplifications?.[level]?.length ?? 0) < 5)
+        }));
+        const total = levelChunks.reduce((sum, { chunks }) => sum + chunks.length, 0);
+        if (total === 0) return;
+
+        setSimplificationsProgress({ ready: 0, total });
+        let ready = 0;
+
+        for (const { level, chunks } of levelChunks) {
+          for (const chunk of chunks) {
+            try {
+              const result = await generateChunkSimplifications(materialId, chunk.id, level, provider);
+              setSelectedMaterial((current) => {
+                if (!current || current.id !== materialId) return current;
+                return {
+                  ...current,
+                  chunks: current.chunks.map((c) =>
+                    c.id === chunk.id ? { ...c, simplifications: result.simplifications } : c
+                  )
+                };
+              });
+            } catch {
+              // skip — lesson still works without pre-generated simplifications
+            }
+            ready++;
+            setSimplificationsProgress({ ready, total });
+          }
         }
+        setSimplificationsProgress(null);
       })();
       // isMaterialLoading stays true here — cleared by handleFirstAudioCached once first chunk audio is ready
     } catch {

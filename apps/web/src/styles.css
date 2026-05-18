@@ -112,6 +112,40 @@ button:disabled {
   padding: 12px;
 }
 
+.prep-progress-wrap {
+  padding: 12px 14px;
+  background: #f0f4fa;
+  border: 1px solid #d0d9ea;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.prep-progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #3a4660;
+  margin-bottom: 7px;
+  letter-spacing: 0.01em;
+}
+
+.prep-progress-track {
+  height: 7px;
+  background: #d0d9ea;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.prep-progress-fill {
+  height: 100%;
+  background: #2459a6;
+  border-radius: 4px;
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  min-width: 0;
+}
+
 .loading-notice {
   display: grid;
   gap: 10px;

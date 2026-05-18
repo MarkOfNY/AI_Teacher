@@ -551,8 +551,17 @@ export function LessonReader({
         </div>
 
         {simplificationsProgress && !wholeReaderProcessing ? (
-          <div className="setup-notice" role="status">
-            Preparing explanations: {simplificationsProgress.ready} of {simplificationsProgress.total} reading parts ready...
+          <div className="prep-progress-wrap" role="status" aria-label="Preparing explanations">
+            <div className="prep-progress-header">
+              <span>Preparing Explanations</span>
+              <span>{Math.round((simplificationsProgress.ready / simplificationsProgress.total) * 100)}%</span>
+            </div>
+            <div className="prep-progress-track">
+              <div
+                className="prep-progress-fill"
+                style={{ width: `${Math.round((simplificationsProgress.ready / simplificationsProgress.total) * 100)}%` }}
+              />
+            </div>
           </div>
         ) : null}
         {isSupportLoading && !openContextChunkId && !wholeReaderProcessing ? (
