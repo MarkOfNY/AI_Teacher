@@ -630,6 +630,20 @@ export function App() {
                 <span />
               </div>
               <p>{statusMessage ?? 'Loading Lesson...'}</p>
+              {simplificationsProgress ? (
+                <div className="prep-progress-wrap overlay-progress" role="status" aria-label="Preparing explanations">
+                  <div className="prep-progress-header">
+                    <span>Preparing Explanations</span>
+                    <span>{Math.round((simplificationsProgress.ready / simplificationsProgress.total) * 100)}%</span>
+                  </div>
+                  <div className="prep-progress-track">
+                    <div
+                      className="prep-progress-fill"
+                      style={{ width: `${Math.round((simplificationsProgress.ready / simplificationsProgress.total) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
         ) : null}

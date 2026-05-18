@@ -146,6 +146,10 @@ button:disabled {
   min-width: 0;
 }
 
+.overlay-progress {
+  margin-bottom: 0;
+}
+
 .loading-notice {
   display: grid;
   gap: 10px;
