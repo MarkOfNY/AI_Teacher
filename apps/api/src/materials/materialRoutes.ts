@@ -102,14 +102,43 @@ async function extractHtmlFromPdf(buffer: Buffer): Promise<string> {
       const baseX = [...xFreq.entries()].sort((a, b) => b[1] - a[1])[0][0];
       const INDENT_THRESHOLD = baseX + 15;
 
-      // Map lines to HTML tags
-      const html = lines.map((line) => {
-        if (line.x >= INDENT_THRESHOLD) return `<blockquote>${line.text}</blockquote>`;
-        if (line.h >= bodyH * 1.15 && line.text.length < 90 && !/[.,;]$/.test(line.text)) {
-          const level = line.h >= bodyH * 1.5 ? 1 : line.h >= bodyH * 1.3 ? 2 : 3;
-          return `<h${level}>${line.text}</h${level}>`;
+      // Group consecutive lines into paragraphs by y-gap.
+      // Lines within ~1.7× the body font height apart are the same paragraph;
+      // a larger gap means a new paragraph (or heading/blockquote always break).
+      const PARA_GAP = bodyH * 1.7;
+
+      type LineBlock = { texts: string[]; h: number; isHeading: boolean; headingLevel?: 1 | 2 | 3; isBlockquote: boolean };
+      const blocks: LineBlock[] = [];
+      let cur: LineBlock | null = null;
+      let prevY: number | null = null;
+
+      for (const line of lines) {
+        const isBlockquote = line.x >= INDENT_THRESHOLD;
+        const isHeadingLine = !isBlockquote && line.h >= bodyH * 1.15 && line.text.length < 90 && !/[.,;]$/.test(line.text);
+        const bigGap = prevY !== null && (prevY - line.y) > PARA_GAP;
+        const typeChange = cur !== null && (isHeadingLine || cur.isHeading || isBlockquote !== cur.isBlockquote);
+
+        if (!cur || bigGap || typeChange) {
+          if (cur) blocks.push(cur);
+          cur = {
+            texts: [line.text],
+            h: line.h,
+            isHeading: isHeadingLine,
+            headingLevel: isHeadingLine ? (line.h >= bodyH * 1.5 ? 1 : line.h >= bodyH * 1.3 ? 2 : 3) : undefined,
+            isBlockquote
+          };
+        } else {
+          cur.texts.push(line.text);
         }
-        return `<p>${line.text}</p>`;
+        prevY = line.y;
+      }
+      if (cur) blocks.push(cur);
+
+      const html = blocks.map((block) => {
+        const text = block.texts.join(' ');
+        if (block.isHeading) return `<h${block.headingLevel}>${text}</h${block.headingLevel}>`;
+        if (block.isBlockquote) return `<blockquote>${text}</blockquote>`;
+        return `<p>${text}</p>`;
       });
 
       htmlParts.push(html.join('\n'));
