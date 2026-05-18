@@ -1,6 +1,6 @@
 import type { Editor } from '@tiptap/react';
 import { EditorContent } from '@tiptap/react';
-import { Bold, Heading1, Heading2, Heading3, Italic, List, ListOrdered } from 'lucide-react';
+import { Bold, Heading1, Heading2, Heading3, Italic, List, ListOrdered, TextQuote } from 'lucide-react';
 
 interface Props {
   editor: Editor | null;
@@ -74,6 +74,16 @@ export function RichTextEditor({ editor }: Props) {
           onMouseDown={(e) => { e.preventDefault(); editor?.chain().focus().toggleOrderedList().run(); }}
         >
           <ListOrdered size={15} aria-hidden="true" />
+        </button>
+        <div className="rte-toolbar-divider" aria-hidden="true" />
+        <button
+          type="button"
+          className={`rte-toolbar-btn${editor?.isActive('blockquote') ? ' is-active' : ''}`}
+          aria-label="Block quote (indented)"
+          aria-pressed={editor?.isActive('blockquote') ?? false}
+          onMouseDown={(e) => { e.preventDefault(); editor?.chain().focus().toggleBlockquote().run(); }}
+        >
+          <TextQuote size={15} aria-hidden="true" />
         </button>
       </div>
       <div className="rte-content">

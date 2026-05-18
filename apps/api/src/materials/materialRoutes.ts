@@ -4,7 +4,11 @@ import { Router } from 'express';
 
 const require = createRequire(import.meta.url);
 // pdf-parse is CommonJS — must be loaded via require in this ESM context
-const pdfParse = require('pdf-parse') as (buffer: Buffer) => Promise<{ text: string }>;
+type PdfPageProxy = {
+  getTextContent(): Promise<{ items: Array<{ str: string; transform: number[]; width: number; height: number } | Record<string, unknown>> }>;
+};
+type PdfParseOptions = { pagerender?: (page: PdfPageProxy) => Promise<string> };
+const pdfParse = require('pdf-parse') as (buffer: Buffer, options?: PdfParseOptions) => Promise<{ text: string }>;
 import { z } from 'zod';
 import type { AiProvider } from '@ai-teacher/shared';
 import { aiTeachingService } from '../ai/aiTeachingService';
@@ -29,9 +33,91 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 
 
 const ACCEPTED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif']);
 
-async function extractTextFromPdf(buffer: Buffer): Promise<string> {
-  const data = await pdfParse(buffer);
-  return data.text.trim();
+// Extracts text from a PDF with structural HTML markup by reading per-item
+// x/y positions to detect indentation, heading size, and paragraph breaks.
+async function extractHtmlFromPdf(buffer: Buffer): Promise<string> {
+  const htmlParts: string[] = [];
+
+  await pdfParse(buffer, {
+    pagerender: async (page: PdfPageProxy) => {
+      const { items } = await page.getTextContent();
+
+      const positioned = items
+        .filter((item): item is { str: string; transform: number[]; width: number; height: number } =>
+          'str' in item && typeof item.str === 'string' && Boolean(item.str.trim())
+        )
+        .map((item) => ({
+          str: item.str,
+          x: item.transform[4],
+          y: item.transform[5],       // PDF y-up: higher = closer to top
+          h: Math.abs(item.height) || Math.abs(item.transform[3]) || 12
+        }));
+
+      if (positioned.length === 0) return '';
+
+      // Sort top-to-bottom (descending PDF y), then left-to-right
+      positioned.sort((a, b) => b.y - a.y || a.x - b.x);
+
+      // Determine body font height (most frequent)
+      const hFreq = new Map<number, number>();
+      for (const item of positioned) {
+        const h = Math.round(item.h);
+        if (h > 0) hFreq.set(h, (hFreq.get(h) ?? 0) + 1);
+      }
+      const bodyH = hFreq.size > 0 ? [...hFreq.entries()].sort((a, b) => b[1] - a[1])[0][0] : 12;
+      const lineTol = Math.max(2, bodyH * 0.45);
+
+      // Group items into visual lines using y-proximity
+      const lines: Array<{ text: string; x: number; y: number; h: number }> = [];
+      let lineItems: typeof positioned = [];
+
+      const flushLine = () => {
+        if (!lineItems.length) return;
+        lineItems.sort((a, b) => a.x - b.x);
+        const text = lineItems.map((i) => i.str).join('').trim();
+        if (text) {
+          lines.push({ text, x: lineItems[0].x, y: lineItems[0].y, h: Math.max(...lineItems.map((i) => i.h)) });
+        }
+        lineItems = [];
+      };
+
+      for (const item of positioned) {
+        if (lineItems.length === 0 || Math.abs(item.y - lineItems[0].y) <= lineTol) {
+          lineItems.push(item);
+        } else {
+          flushLine();
+          lineItems = [item];
+        }
+      }
+      flushLine();
+
+      if (lines.length === 0) return '';
+
+      // Determine base left margin (most common x bucket)
+      const xFreq = new Map<number, number>();
+      for (const line of lines) {
+        const bucket = Math.round(line.x / 8) * 8;
+        xFreq.set(bucket, (xFreq.get(bucket) ?? 0) + 1);
+      }
+      const baseX = [...xFreq.entries()].sort((a, b) => b[1] - a[1])[0][0];
+      const INDENT_THRESHOLD = baseX + 15;
+
+      // Map lines to HTML tags
+      const html = lines.map((line) => {
+        if (line.x >= INDENT_THRESHOLD) return `<blockquote>${line.text}</blockquote>`;
+        if (line.h >= bodyH * 1.15 && line.text.length < 90 && !/[.,;]$/.test(line.text)) {
+          const level = line.h >= bodyH * 1.5 ? 1 : line.h >= bodyH * 1.3 ? 2 : 3;
+          return `<h${level}>${line.text}</h${level}>`;
+        }
+        return `<p>${line.text}</p>`;
+      });
+
+      htmlParts.push(html.join('\n'));
+      return '';
+    }
+  });
+
+  return htmlParts.join('\n');
 }
 
 // Extract embedded JPEG images from a PDF buffer (works for scanned/image-only PDFs).
@@ -137,13 +223,10 @@ export function createMaterialRouter(service: MaterialServiceLike = materialServ
       let text: string;
 
       if (file.mimetype === 'application/pdf') {
-        const rawText = await extractTextFromPdf(file.buffer);
-        if (rawText.length < 20) {
+        text = await extractHtmlFromPdf(file.buffer);
+        if (text.length < 20) {
           // No selectable text — PDF is image-based. Send to Qwen VL for HTML extraction.
           text = await extractTextFromScannedPdf(file.buffer);
-        } else {
-          // Has selectable text — structure it as HTML to preserve document formatting.
-          text = await aiTeachingService.structureTextAsHtml({ provider: 'qwen', text: rawText });
         }
         if (text.length < 20) {
           res.status(422).json({ error: 'No readable text could be found in this PDF, even after AI analysis. The document may be blank or in an unsupported format.' });
