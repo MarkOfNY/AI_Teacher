@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import type { AiCapability, AiProvider, AiRoutingPreferences, ReadingLevel } from '@ai-teacher/shared';
 import { DEFAULT_ROUTING_PREFERENCES } from '@ai-teacher/shared';
-import { defineVocabulary, explainContext, explainGaps, simplifyText } from '../api/aiClient';
+import { defineVocabulary, explainContext, explainGaps } from '../api/aiClient';
 import {
   createUserSession,
   createMaterial,
@@ -94,7 +94,6 @@ export function App() {
   const [simplificationsProgress, setSimplificationsProgress] = useState<{ ready: number; total: number; levelLabel: string } | null>(null);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [isSavingRouting, setIsSavingRouting] = useState(false);
-  const [simplifiedTexts, setSimplifiedTexts] = useState<Record<string, string>>({});
   const [contextTexts, setContextTexts] = useState<Record<string, string>>({});
   const [explainAgainCounts, setExplainAgainCounts] = useState<Record<string, number>>({});
   const [definitionTexts, setDefinitionTexts] = useState<Record<string, string>>({});
@@ -251,7 +250,7 @@ export function App() {
         setSelectedMaterial(material);
         setScore(null);
         setFinalScore(null);
-        setSimplifiedTexts({});
+
         setContextTexts({});
         setDefinitionTexts({});
       }
@@ -324,7 +323,7 @@ export function App() {
       setSelectedMaterial(material);
       setScore(null);
       setFinalScore(null);
-      setSimplifiedTexts({});
+
       setContextTexts({});
       setDefinitionTexts({});
       setSimplificationsProgress(null);
@@ -492,18 +491,6 @@ export function App() {
     }
   }
 
-  function handleSimplify(input: { chunkId: string; text: string; readingLevel?: ReadingLevel }) {
-    void runSupportRequest({
-      chunkId: input.chunkId,
-      capability: 'simplifyText',
-      action: async (provider) => {
-        const response = await simplifyText({ text: input.text, readingLevel: input.readingLevel ?? 'simple', provider });
-        return response.text;
-      },
-      onSuccess: (text) => setSimplifiedTexts((currentTexts) => ({ ...currentTexts, [input.chunkId]: text }))
-    });
-  }
-
   function handleExplainContext(input: { chunkId: string; text: string }) {
     void runSupportRequest({
       chunkId: input.chunkId,
@@ -560,7 +547,7 @@ export function App() {
       setSelectedMaterial(material);
       setScore(null);
       setFinalScore(null);
-      setSimplifiedTexts({});
+
       setContextTexts({});
       setDefinitionTexts({});
       setStatusMessage(null);
@@ -585,7 +572,7 @@ export function App() {
       setSelectedMaterial(material);
       setScore(null);
       setFinalScore(null);
-      setSimplifiedTexts({});
+
       setContextTexts({});
       setDefinitionTexts({});
       setStatusMessage(null);
@@ -747,7 +734,6 @@ export function App() {
                 finalScore={finalScore}
                 isSubmitting={isScoring}
                 isSubmittingFinal={isScoringFinal}
-                simplifiedTexts={simplifiedTexts}
                 contextTexts={contextTexts}
                 definitionTexts={definitionTexts}
                 isSupportLoading={isSupportLoading}
@@ -759,7 +745,6 @@ export function App() {
                 onSubmitFinalSummary={(transcript) => void handleSubmitFinalSummary(transcript)}
                 simplificationsProgress={simplificationsProgress}
                 onReadingLevelChange={handleReadingLevelChange}
-                onSimplify={handleSimplify}
                 onExplainContext={handleExplainContext}
                 onExplainAgain={handleExplainAgain}
                 onDefineVocabulary={handleDefineVocabulary}

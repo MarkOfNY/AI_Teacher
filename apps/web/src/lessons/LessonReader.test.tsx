@@ -13,7 +13,7 @@ describe('LessonReader', () => {
     vi.restoreAllMocks();
   });
 
-  it('shows reading parts as the only text column with inline reading level buttons', () => {
+  it('shows reading parts with inline reading level buttons including Original', () => {
     render(<LessonReader title="History" chunks={chunks} />);
 
     expect(screen.getByRole('region', { name: 'Reading Parts' })).toBeInTheDocument();
@@ -22,22 +22,20 @@ describe('LessonReader', () => {
     expect(screen.getByRole('button', { name: 'Simple' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: 'Very Simple' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Intermediate' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Original' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Original' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Middle School' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Standard' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Clear' })).not.toBeInTheDocument();
   });
 
   it('lets the student change reading levels by clicking the level buttons', async () => {
-    const simplify = vi.fn();
-    render(<LessonReader title="History" chunks={chunks} onSimplify={simplify} />);
+    render(<LessonReader title="History" chunks={chunks} />);
 
     expect(screen.getByRole('button', { name: 'Simple' })).toHaveAttribute('aria-pressed', 'true');
 
     await userEvent.click(screen.getByRole('button', { name: 'Intermediate' }));
 
     expect(screen.getByRole('button', { name: 'Intermediate' })).toHaveAttribute('aria-pressed', 'true');
-    expect(simplify).toHaveBeenCalledWith({ chunkId: 'c1', text: 'First chunk has liberty.', readingLevel: 'middleSchool' });
     expect(screen.getByRole('dialog', { name: 'Processing lesson changes' })).toBeInTheDocument();
 
     await waitFor(() => {
@@ -49,70 +47,64 @@ describe('LessonReader', () => {
     expect(screen.getByRole('button', { name: 'Simple' })).toHaveAttribute('aria-pressed', 'true');
   });
 
-  it('shows simplified text by default and lets an individual reading part switch back to original', async () => {
-    render(
-      <LessonReader
-        title="History"
-        chunks={chunks}
-        simplifiedTexts={{ c1: 'First part says people should be free.' }}
-      />
-    );
+  it('shows pre-generated simplified versions with ← → navigation arrows', () => {
+    const chunksWithSimplifications = [
+      {
+        ...chunks[0],
+        simplifications: {
+          simple: ['First simplified version.', 'Second simplified version.', 'Third version.']
+        }
+      },
+      chunks[1]
+    ];
+    render(<LessonReader title="History" chunks={chunksWithSimplifications} />);
+
     const part = within(screen.getByRole('article', { name: 'Reading Part 1' }));
-    const modeButtons = within(part.getByRole('group', { name: 'Text mode for Reading Part 1' })).getAllByRole('button');
 
-    expect(modeButtons.map((button) => button.textContent)).toEqual(['Simplified', 'Original']);
-    expect(part.getByRole('button', { name: 'Simplified text for Reading Part 1' })).toHaveAttribute('aria-pressed', 'true');
-    expect(part.getByRole('button', { name: 'free' })).toBeInTheDocument();
-
-    await userEvent.click(part.getByRole('button', { name: 'Original text for Reading Part 1' }));
-
-    expect(part.getByRole('button', { name: 'Original text for Reading Part 1' })).toHaveAttribute('aria-pressed', 'true');
     expect(part.getByRole('button', { name: 'First' })).toBeInTheDocument();
+    expect(part.getByText('1 of 3')).toBeInTheDocument();
+    expect(part.getByRole('button', { name: 'Previous version' })).toBeDisabled();
+    expect(part.getByRole('button', { name: 'Next version' })).not.toBeDisabled();
   });
 
-  it('keeps simplified mode selected when simplified is clicked more than once', async () => {
-    render(
-      <LessonReader
-        title="History"
-        chunks={chunks}
-        simplifiedTexts={{ c1: 'First part says people should be free.' }}
-      />
-    );
-    const part = within(screen.getByRole('article', { name: 'Reading Part 1' }));
-    const simplifiedButton = part.getByRole('button', { name: 'Simplified text for Reading Part 1' });
+  it('navigates through simplified versions with arrow buttons', async () => {
+    const chunksWithSimplifications = [
+      {
+        ...chunks[0],
+        simplifications: {
+          simple: ['First simplified version.', 'Second simplified version.']
+        }
+      },
+      chunks[1]
+    ];
+    render(<LessonReader title="History" chunks={chunksWithSimplifications} />);
 
-    await userEvent.click(simplifiedButton);
-    await userEvent.click(simplifiedButton);
-
-    expect(simplifiedButton).toHaveAttribute('aria-pressed', 'true');
-    expect(part.getByRole('button', { name: 'free' })).toBeInTheDocument();
-  });
-
-  it('shows a polished loading notice over original text while simplified text is being generated', async () => {
-    render(
-      <LessonReader
-        title="History"
-        chunks={chunks}
-        isSupportLoading
-        supportLoadingChunkId="c1"
-      />
-    );
     const part = within(screen.getByRole('article', { name: 'Reading Part 1' }));
 
-    await userEvent.click(part.getByRole('button', { name: 'Simplified text for Reading Part 1' }));
-
-    expect(part.getByRole('status', { name: 'Simplifying Reading Part 1' })).toHaveTextContent('Simplifying...');
     expect(part.getByRole('button', { name: 'First' })).toBeInTheDocument();
+
+    await userEvent.click(part.getByRole('button', { name: 'Next version' }));
+
+    expect(part.getByRole('button', { name: 'Second' })).toBeInTheDocument();
+    expect(part.getByText('2 of 2')).toBeInTheDocument();
+    expect(part.getByRole('button', { name: 'Next version' })).toBeDisabled();
   });
 
-  it('requests simplification for all reading parts at the selected level', async () => {
-    const simplify = vi.fn();
-    render(<LessonReader title="History" chunks={chunks} onSimplify={simplify} />);
+  it('shows original text when Original reading level is selected', async () => {
+    const chunksWithSimplifications = [
+      {
+        ...chunks[0],
+        simplifications: { simple: ['Simplified text here.'] }
+      },
+      chunks[1]
+    ];
+    render(<LessonReader title="History" chunks={chunksWithSimplifications} />);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Intermediate' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Original' }));
 
-    expect(simplify).toHaveBeenCalledWith({ chunkId: 'c1', text: 'First chunk has liberty.', readingLevel: 'middleSchool' });
-    expect(simplify).toHaveBeenCalledWith({ chunkId: 'c2', text: 'Second chunk has equality.', readingLevel: 'middleSchool' });
+    const part = within(screen.getByRole('article', { name: 'Reading Part 1' }));
+    expect(part.getByRole('button', { name: 'liberty' })).toBeInTheDocument();
+    expect(part.queryByText('Simplified text here.')).not.toBeInTheDocument();
   });
 
   it('shows a page-level processing overlay and blocks controls for whole-reader work', () => {
@@ -145,20 +137,14 @@ describe('LessonReader', () => {
       onerror: null,
     })));
 
-    render(
-      <LessonReader
-        title="History"
-        chunks={chunks}
-        simplifiedTexts={{ c1: 'Simple liberty explanation.' }}
-      />
-    );
+    render(<LessonReader title="History" chunks={chunks} />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Read Reading Part 1 aloud' }));
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Stop reading Reading Part 1' })).toBeInTheDocument();
     });
-    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('Simple%20liberty%20explanation.'));
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('First%20chunk%20has%20liberty'));
 
     await userEvent.click(screen.getByRole('button', { name: 'Stop reading Reading Part 1' }));
 
@@ -166,7 +152,24 @@ describe('LessonReader', () => {
     expect(screen.getByRole('button', { name: 'Read Reading Part 1 aloud' })).toBeInTheDocument();
   });
 
-  it('opens reading part context from the header and closes it from x or outside click', async () => {
+  it('opens context explanation popover when no context is loaded, requesting from AI', async () => {
+    const explainContext = vi.fn();
+    render(
+      <LessonReader
+        title="History"
+        chunks={chunks}
+        onExplainContext={explainContext}
+      />
+    );
+    const part = within(screen.getByRole('article', { name: 'Reading Part 1' }));
+
+    await userEvent.click(part.getByRole('button', { name: 'Explain Reading Part 1' }));
+
+    expect(explainContext).toHaveBeenCalledWith({ chunkId: 'c1', text: 'First chunk has liberty.' });
+    expect(part.getByRole('dialog', { name: 'Context explanation for Reading Part 1' })).toBeInTheDocument();
+  });
+
+  it('shows pre-loaded context text in popover without re-requesting', async () => {
     const explainContext = vi.fn();
     render(
       <div>
@@ -183,36 +186,32 @@ describe('LessonReader', () => {
 
     await userEvent.click(part.getByRole('button', { name: 'Explain Reading Part 1' }));
 
-    expect(explainContext).toHaveBeenCalledWith({ chunkId: 'c1', text: 'First chunk has liberty.' });
-    expect(part.getByRole('dialog', { name: 'Context for Reading Part 1' })).toHaveTextContent('legal context');
+    expect(explainContext).not.toHaveBeenCalled();
+    expect(part.getByRole('dialog', { name: 'Context explanation for Reading Part 1' })).toHaveTextContent('legal context');
 
-    await userEvent.click(part.getByRole('button', { name: 'Close context for Reading Part 1' }));
-    expect(part.queryByRole('dialog', { name: 'Context for Reading Part 1' })).not.toBeInTheDocument();
+    await userEvent.click(part.getByRole('button', { name: 'Close explanation for Reading Part 1' }));
+    expect(part.queryByRole('dialog', { name: 'Context explanation for Reading Part 1' })).not.toBeInTheDocument();
 
     await userEvent.click(part.getByRole('button', { name: 'Explain Reading Part 1' }));
     await userEvent.click(screen.getByRole('button', { name: 'Outside target' }));
 
-    expect(part.queryByRole('dialog', { name: 'Context for Reading Part 1' })).not.toBeInTheDocument();
+    expect(part.queryByRole('dialog', { name: 'Context explanation for Reading Part 1' })).not.toBeInTheDocument();
   });
 
-  it('disables explain and text mode controls while a reading part is in test mode', async () => {
+  it('disables explain while a reading part is in test mode', async () => {
     render(<LessonReader title="History" chunks={chunks} />);
     const part = within(screen.getByRole('article', { name: 'Reading Part 1' }));
 
     await userEvent.click(part.getByRole('button', { name: 'Test Reading Part 1' }));
 
     expect(part.getByRole('button', { name: 'Explain Reading Part 1' })).toBeDisabled();
-    expect(part.getByRole('button', { name: 'Original text for Reading Part 1' })).toBeDisabled();
-    expect(part.getByRole('button', { name: 'Simplified text for Reading Part 1' })).toBeDisabled();
   });
 
-  it.skip('disables explain and text mode controls on locked reading parts', () => {
+  it.skip('disables explain on locked reading parts', () => {
     render(<LessonReader title="History" chunks={chunks} />);
     const lockedPart = within(screen.getByRole('article', { name: 'Reading Part 2' }));
 
     expect(lockedPart.getByRole('button', { name: 'Explain Reading Part 2' })).toBeDisabled();
-    expect(lockedPart.getByRole('button', { name: 'Original text for Reading Part 2' })).toBeDisabled();
-    expect(lockedPart.getByRole('button', { name: 'Simplified text for Reading Part 2' })).toBeDisabled();
   });
 
   it('opens a phrase help popover that can define a word', async () => {
