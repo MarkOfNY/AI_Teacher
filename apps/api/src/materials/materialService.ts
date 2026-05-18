@@ -7,6 +7,20 @@ import { determineChunkStatus, determineMaterialStatus } from '../lessons/lesson
 import { normalizeScoreResult } from '../scoring/rubric';
 import { chunkText } from './chunker';
 
+function stripHtml(html: string): string {
+  return html
+    .replace(/<\/p>|<\/h[1-6]>|<br\s*\/?>/gi, '\n')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 function words(value: string) {
   return Array.from(new Set(value.toLowerCase().match(/[a-z0-9']+/g) ?? [])).filter((word) => word.length > 3);
 }
@@ -103,7 +117,7 @@ function countSentencesForCap(text: string) {
 
 export const materialService = {
   async createMaterial(input: { userProfileId: string; title: string; originalText: string; readingPartCount?: number }) {
-    const chunks = chunkText(input.originalText, { readingPartCount: input.readingPartCount });
+    const chunks = chunkText(stripHtml(input.originalText), { readingPartCount: input.readingPartCount });
 
     return prisma.material.create({
       data: {
@@ -156,7 +170,7 @@ export const materialService = {
       throw new Error('Material not found');
     }
 
-    const chunks = chunkText(input.originalText);
+    const chunks = chunkText(stripHtml(input.originalText));
     await prisma.$transaction(async (transaction) => {
       await transaction.paraphraseAttempt.deleteMany({ where: { materialId: material.id } });
       await transaction.materialChunk.deleteMany({ where: { materialId: material.id } });
@@ -198,7 +212,7 @@ export const materialService = {
       throw new Error('Material not found');
     }
 
-    const nextChunks = chunkText(material.originalText, { readingPartCount: input.readingPartCount });
+    const nextChunks = chunkText(stripHtml(material.originalText), { readingPartCount: input.readingPartCount });
     const existingByIndex = new Map(material.chunks.map((chunk) => [chunk.index, chunk]));
     const nextIndexes = new Set(nextChunks.map((chunk) => chunk.index));
     const extraChunks = material.chunks.filter((chunk) => !nextIndexes.has(chunk.index));
@@ -325,22 +339,37 @@ export const materialService = {
     if (needed === 0) return { id: chunk.id, simplifications: stored };
 
     const provider = input.provider ?? 'qwen';
+    const THRESHOLD = 90;
     const VERSION_CONFIGS = [
-      { hint: undefined, temperature: 0.4 },
-      { hint: 'Use very short sentences. One idea per sentence.', temperature: 0.6 },
-      { hint: 'Start with the single most important point, then add supporting details.', temperature: 0.7 },
-      { hint: 'Write this as if explaining to a curious friend. Use natural, conversational language.', temperature: 0.8 },
-      { hint: 'Structure your answer around: what happened, why it happened, and why it matters.', temperature: 0.9 }
+      { hint: 'Cover all key ideas from the original.', temperature: 0.4 },
+      { hint: 'Use very short sentences. One idea per sentence. Cover all key ideas.', temperature: 0.55 },
+      { hint: 'Lead with the most important point, then each supporting detail. Cover all key ideas.', temperature: 0.6 },
+      { hint: 'Explain conversationally, as if to a friend. Cover all key ideas from the original.', temperature: 0.65 },
+      { hint: 'Organize around what happened, why it happened, and why it matters. Cover all key ideas.', temperature: 0.7 }
     ] as const;
 
-    const newVersions = await Promise.all(
+    const candidates = await Promise.all(
       Array.from({ length: needed }, (_, i) => {
         const { hint, temperature } = VERSION_CONFIGS[(existing.length + i) % VERSION_CONFIGS.length];
         return aiTeachingService.simplifyText({ provider, text: chunk.text, readingLevel: input.readingLevel, hint, temperature }).catch(() => null);
       })
     );
 
-    const versions = [...existing, ...newVersions.filter((v): v is string => v !== null)];
+    const validCandidates = candidates.filter((v): v is string => v !== null);
+
+    const scored = await Promise.all(
+      validCandidates.map(async (text) => {
+        try {
+          const result = await aiTeachingService.scoreParaphrase({ provider, referenceText: chunk.text, transcript: text, threshold: THRESHOLD });
+          return { text, score: result.score };
+        } catch {
+          return { text, score: THRESHOLD };
+        }
+      })
+    );
+
+    const passing = scored.filter((s) => s.score >= THRESHOLD).map((s) => s.text);
+    const versions = [...existing, ...passing];
     const updated = { ...stored, [input.readingLevel]: versions };
 
     await prisma.materialChunk.update({
@@ -357,7 +386,7 @@ export const materialService = {
       throw new Error('Material not found');
     }
 
-    return { readingPartCount: await suggestReadingPartCount({ text: material.originalText, provider }) };
+    return { readingPartCount: await suggestReadingPartCount({ text: stripHtml(material.originalText), provider }) };
   },
 
   async submitParaphraseAttempt(input: { materialId: string; scope: 'chunk' | 'final'; chunkId?: string; transcript: string; referenceText?: string }) {
@@ -384,7 +413,7 @@ export const materialService = {
     const threshold = input.scope === 'chunk'
       ? material.userProfile.chunkMasteryThreshold
       : material.userProfile.finalSummaryMasteryThreshold;
-    const referenceText = input.referenceText ?? chunk?.text ?? material.originalText;
+    const referenceText = input.referenceText ?? chunk?.text ?? stripHtml(material.originalText);
 
     const scoringCapability = input.scope === 'chunk' ? 'scoreChunkParaphrase' : 'scoreFinalSummary';
     const routingPref = material.userProfile.routingPreferences.find((p) => p.capability === scoringCapability);

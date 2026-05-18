@@ -344,6 +344,106 @@ button:disabled {
   resize: vertical;
 }
 
+/* Rich text editor */
+.rte-wrapper {
+  border: 1px solid #c5ccd6;
+  border-radius: 6px;
+  background: #ffffff;
+  overflow: hidden;
+  font-weight: 400;
+}
+
+.rte-wrapper:focus-within {
+  border-color: #386641;
+  outline: 2px solid rgba(56, 102, 65, 0.18);
+}
+
+.rte-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 8px;
+  border-bottom: 1px solid #e8ebef;
+  background: #f6f7f9;
+}
+
+.rte-toolbar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 26px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #59616d;
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+}
+
+.rte-toolbar-btn:hover {
+  background: #e3e7ec;
+  color: #202124;
+}
+
+.rte-toolbar-btn.is-active {
+  background: #d6e4d9;
+  color: #2d5535;
+}
+
+.rte-toolbar-divider {
+  width: 1px;
+  height: 18px;
+  background: #d8dde5;
+  margin: 0 3px;
+}
+
+.rte-content {
+  padding: 10px 11px;
+  min-height: 180px;
+}
+
+.rte-content .ProseMirror {
+  outline: none;
+  min-height: 160px;
+  line-height: 1.55;
+}
+
+.rte-content .ProseMirror p {
+  margin: 0 0 8px;
+}
+
+.rte-content .ProseMirror h1,
+.rte-content .ProseMirror h2,
+.rte-content .ProseMirror h3 {
+  margin: 12px 0 6px;
+  line-height: 1.3;
+}
+
+.rte-content .ProseMirror h1 { font-size: 1.35em; }
+.rte-content .ProseMirror h2 { font-size: 1.15em; }
+.rte-content .ProseMirror h3 { font-size: 1.05em; }
+
+.rte-content .ProseMirror ul,
+.rte-content .ProseMirror ol {
+  margin: 0 0 8px;
+  padding-left: 22px;
+}
+
+.rte-content .ProseMirror li {
+  margin-bottom: 3px;
+}
+
+.rte-content .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: #9da5b0;
+  pointer-events: none;
+  height: 0;
+}
+
 .input-options {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

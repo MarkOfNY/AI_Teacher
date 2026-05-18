@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEditor } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
 import { FileText, Image } from 'lucide-react';
 import { extractFile } from '../api/materialsClient';
 import { ClassroomImporter } from '../classroom/ClassroomImporter';
+import { RichTextEditor } from './RichTextEditor';
 
 export interface CreateMaterialInput {
   title: string;
@@ -39,19 +42,29 @@ function titleFromFileName(name: string) {
 
 export function MaterialEditor({ onCreateMaterial, onUpdateMaterial, onCancelEdit, editingMaterial = null, showClassroomImport = false }: MaterialEditorProps) {
   const [title, setTitle] = useState('');
-  const [material, setMaterial] = useState('');
+  const [isEmpty, setIsEmpty] = useState(true);
   const [isDragOver, setIsDragOver] = useState(false);
   const [extractState, setExtractState] = useState<'idle' | 'extracting' | 'error'>('idle');
   const [extractError, setExtractError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isEditing = Boolean(editingMaterial);
 
+  const editor = useEditor({
+    extensions: [StarterKit],
+    content: '',
+    onUpdate: ({ editor: e }) => {
+      setIsEmpty(e.isEmpty);
+    }
+  });
+
   useEffect(() => {
     setTitle(editingMaterial?.title ?? '');
-    setMaterial(editingMaterial?.originalText ?? '');
     setExtractState('idle');
     setExtractError(null);
-  }, [editingMaterial]);
+    const content = editingMaterial?.originalText ?? '';
+    editor?.commands.setContent(content);
+    setIsEmpty(!content.trim());
+  }, [editingMaterial, editor]);
 
   const handleFile = useCallback(async (file: File) => {
     if (!ACCEPTED_MIME.has(file.type)) {
@@ -69,13 +82,14 @@ export function MaterialEditor({ onCreateMaterial, onUpdateMaterial, onCancelEdi
         return;
       }
       setTitle((current) => current || titleFromFileName(file.name));
-      setMaterial(text);
+      editor?.commands.setContent(text);
+      setIsEmpty(false);
       setExtractState('idle');
     } catch (err) {
       setExtractError(err instanceof Error ? err.message : 'Text extraction failed. Try again or paste text manually.');
       setExtractState('error');
     }
-  }, []);
+  }, [editor]);
 
   function handleDragOver(event: React.DragEvent) {
     event.preventDefault();
@@ -115,13 +129,13 @@ export function MaterialEditor({ onCreateMaterial, onUpdateMaterial, onCancelEdi
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmedTitle = title.trim();
-    const trimmedMaterial = material.trim();
-    if (!trimmedTitle || !trimmedMaterial) return;
+    const html = editor?.getHTML() ?? '';
+    if (!trimmedTitle || isEmpty) return;
 
     if (editingMaterial) {
-      onUpdateMaterial?.({ materialId: editingMaterial.id, title: trimmedTitle, originalText: trimmedMaterial });
+      onUpdateMaterial?.({ materialId: editingMaterial.id, title: trimmedTitle, originalText: html });
     } else {
-      onCreateMaterial?.({ title: trimmedTitle, originalText: trimmedMaterial });
+      onCreateMaterial?.({ title: trimmedTitle, originalText: html });
     }
   }
 
@@ -143,7 +157,8 @@ export function MaterialEditor({ onCreateMaterial, onUpdateMaterial, onCancelEdi
         <ClassroomImporter
           onImport={(input) => {
             setTitle((current) => current || input.title);
-            setMaterial(input.text);
+            editor?.commands.setContent(input.text);
+            setIsEmpty(!input.text.trim());
           }}
         />
       ) : null}
@@ -205,18 +220,13 @@ export function MaterialEditor({ onCreateMaterial, onUpdateMaterial, onCancelEdi
         <p className="upload-error" role="alert">{extractError}</p>
       ) : null}
 
-      <label className="field">
+      <div className="field">
         <span>Material text</span>
-        <textarea
-          name="originalText"
-          placeholder="Extracted text appears here — or paste / type material directly."
-          value={material}
-          onChange={(event) => setMaterial(event.target.value)}
-        />
-      </label>
+        <RichTextEditor editor={editor} />
+      </div>
 
       <div className="editor-actions">
-        <button className="primary-button" type="submit" disabled={!title.trim() || !material.trim() || isExtracting}>
+        <button className="primary-button" type="submit" disabled={!title.trim() || isEmpty || isExtracting}>
           {isEditing ? 'Save Changes' : 'Create Lesson'}
         </button>
         {isEditing ? (
