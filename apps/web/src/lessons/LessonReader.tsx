@@ -60,7 +60,7 @@ interface LessonReaderProps {
   isSupportLoading?: boolean;
   supportLoadingChunkId?: string | null;
   isReaderProcessing?: boolean;
-  simplificationsProgress?: { ready: number; total: number } | null;
+  simplificationsProgress?: { ready: number; total: number; levelLabel: string } | null;
   onSimplify?: (input: { chunkId: string; text: string; readingLevel: ReadingLevel }) => void;
   onExplainContext?: (input: { chunkId: string; text: string }) => void;
   onExplainAgain?: (input: { chunkId: string; text: string }) => void;
@@ -553,7 +553,7 @@ export function LessonReader({
         {simplificationsProgress && !wholeReaderProcessing ? (
           <div className="prep-progress-wrap" role="status" aria-label="Preparing explanations">
             <div className="prep-progress-header">
-              <span>Preparing Explanations</span>
+              <span>Preparing {simplificationsProgress.levelLabel} Explanations</span>
               <span>{Math.round((simplificationsProgress.ready / simplificationsProgress.total) * 100)}%</span>
             </div>
             <div className="prep-progress-track">

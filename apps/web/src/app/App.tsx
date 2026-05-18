@@ -91,7 +91,7 @@ export function App() {
   const [finalScore, setFinalScore] = useState<ScoreResponse | null>(null);
   const [isScoring, setIsScoring] = useState(false);
   const [isScoringFinal, setIsScoringFinal] = useState(false);
-  const [simplificationsProgress, setSimplificationsProgress] = useState<{ ready: number; total: number } | null>(null);
+  const [simplificationsProgress, setSimplificationsProgress] = useState<{ ready: number; total: number; levelLabel: string } | null>(null);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [isSavingRouting, setIsSavingRouting] = useState(false);
   const [simplifiedTexts, setSimplifiedTexts] = useState<Record<string, string>>({});
@@ -330,6 +330,11 @@ export function App() {
       setStatusMessage('Preparing audio...');
       void (async () => {
         const levels = ['simple', 'verySimple', 'middleSchool'] as const;
+        const levelLabels: Record<typeof levels[number], string> = {
+          simple: 'Simple',
+          verySimple: 'Very Simple',
+          middleSchool: 'Intermediate'
+        };
         const provider = getSimplifyProvider();
         const materialId = material.id;
         const levelChunks = levels.map((level) => ({
@@ -339,10 +344,12 @@ export function App() {
         const total = levelChunks.reduce((sum, { chunks }) => sum + chunks.length, 0);
         if (total === 0) return;
 
-        setSimplificationsProgress({ ready: 0, total });
         let ready = 0;
 
         for (const { level, chunks } of levelChunks) {
+          if (chunks.length === 0) continue;
+          const levelLabel = levelLabels[level];
+          setSimplificationsProgress({ ready, total, levelLabel });
           for (const chunk of chunks) {
             try {
               const result = await generateChunkSimplifications(materialId, chunk.id, level, provider);
@@ -359,7 +366,7 @@ export function App() {
               // skip — lesson still works without pre-generated simplifications
             }
             ready++;
-            setSimplificationsProgress({ ready, total });
+            setSimplificationsProgress({ ready, total, levelLabel });
           }
         }
         setSimplificationsProgress(null);
@@ -390,9 +397,14 @@ export function App() {
     );
     if (chunksNeeding.length === 0) return Promise.resolve();
 
+    const levelLabels: Record<Exclude<ReadingLevel, 'original'>, string> = {
+      simple: 'Simple',
+      verySimple: 'Very Simple',
+      middleSchool: 'Intermediate'
+    };
     const materialId = material.id;
     const provider = getSimplifyProvider();
-    setSimplificationsProgress({ ready: 0, total: chunksNeeding.length });
+    setSimplificationsProgress({ ready: 0, total: chunksNeeding.length, levelLabel: levelLabels[readingLevel] });
 
     return (async () => {
       let ready = 0;
@@ -633,7 +645,7 @@ export function App() {
               {simplificationsProgress ? (
                 <div className="prep-progress-wrap overlay-progress" role="status" aria-label="Preparing explanations">
                   <div className="prep-progress-header">
-                    <span>Preparing Explanations</span>
+                    <span>Preparing {simplificationsProgress.levelLabel} Explanations</span>
                     <span>{Math.round((simplificationsProgress.ready / simplificationsProgress.total) * 100)}%</span>
                   </div>
                   <div className="prep-progress-track">

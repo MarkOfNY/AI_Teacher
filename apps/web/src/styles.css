@@ -124,7 +124,7 @@ button:disabled {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  font-size: 0.78rem;
+  font-size: 0.9rem;
   font-weight: 600;
   color: #3a4660;
   margin-bottom: 7px;
