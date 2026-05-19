@@ -13,6 +13,7 @@ function testApp() {
     explainContext: async () => 'This matters because it connects to the event.',
     explainGaps: async () => 'Focus on the missing cause and result.',
     defineVocabulary: async () => 'Liberty means freedom in this sentence.',
+    generateSentenceFrames: async () => '[{"frame":"The main cause of ___ was","hint":"the event"},{"frame":"This mattered because ___","hint":"the effect"}]',
     scoreParaphrase: async () => ({ score: 95, passed: true, rubric: { mainIdea: 95, keyDetails: 95, context: 95, whyItMatters: 95, accuracy: 95 }, understood: [], missed: [], feedback: 'Good.' })
   }));
   return app;
@@ -70,6 +71,7 @@ describe('ai routes', () => {
       explainContext: async () => 'unused',
       explainGaps: async () => 'unused',
       defineVocabulary: async () => 'unused',
+      generateSentenceFrames: async () => '[]',
       scoreParaphrase: async () => ({ score: 95, passed: true, rubric: { mainIdea: 95, keyDetails: 95, context: 95, whyItMatters: 95, accuracy: 95 }, understood: [], missed: [], feedback: 'Good.' })
     }));
 

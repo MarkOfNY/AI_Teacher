@@ -2,6 +2,11 @@ import type { ReadingLevel } from '@ai-teacher/shared';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.trim() || 'http://localhost:3001';
 
+export interface KeyTerm {
+  term: string;
+  definition: string;
+}
+
 export interface MaterialChunkResponse {
   id: string;
   materialId: string;
@@ -11,6 +16,7 @@ export interface MaterialChunkResponse {
   bestScore: number | null;
   simplifications?: Partial<Record<ReadingLevel, string[]>>;
   contextExplanation?: string | null;
+  keyTerms?: KeyTerm[];
 }
 
 export interface UserSession {
@@ -181,6 +187,16 @@ export async function saveContextExplanation(materialId: string, chunkId: string
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ explanation })
   });
+}
+
+export async function generateKeyTerms(materialId: string, chunkId: string, text?: string): Promise<{ id: string; keyTerms: KeyTerm[] }> {
+  const response = await fetch(`${API_BASE_URL}/materials/${materialId}/chunks/${chunkId}/key-terms`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ provider: 'qwen', ...(text ? { text } : {}) })
+  });
+  if (!response.ok) throw new Error('Unable to generate key terms.');
+  return response.json() as Promise<{ id: string; keyTerms: KeyTerm[] }>;
 }
 
 export async function submitParaphraseAttempt(input: SubmitParaphraseAttemptRequest) {

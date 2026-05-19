@@ -515,12 +515,12 @@ export function App() {
     });
   }
 
-  function handleDefineVocabulary(input: { chunkId: string; selectedText: string; contextText: string }) {
+  function handleDefineVocabulary(input: { chunkId: string; selectedText: string; contextText: string; readingLevel: ReadingLevel }) {
     void runSupportRequest({
       chunkId: input.chunkId,
       capability: 'defineVocabulary',
       action: async (provider) => {
-        const response = await defineVocabulary({ term: input.selectedText, contextText: input.contextText, provider });
+        const response = await defineVocabulary({ term: input.selectedText, contextText: input.contextText, readingLevel: input.readingLevel, provider });
         return response.definition;
       },
       onSuccess: (text) => setDefinitionTexts((currentTexts) => ({ ...currentTexts, [input.chunkId]: text }))
@@ -737,8 +737,10 @@ export function App() {
             </div>
             {selectedMaterial ? (
               <LessonReader
+                key={selectedMaterial.id}
                 title={selectedMaterial.title}
                 chunks={selectedMaterial.chunks}
+                materialId={selectedMaterial.id}
                 chunkMasteryThreshold={profile?.chunkMasteryThreshold ?? 80}
                 readingPartCount={selectedMaterial.chunks.length}
                 sentenceCount={Math.max(1, countSentences(selectedMaterial.originalText))}

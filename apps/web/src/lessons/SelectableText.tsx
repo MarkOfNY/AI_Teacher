@@ -1,5 +1,4 @@
-import { useMemo, useState } from 'react';
-import { HelpPopover } from './HelpPopover';
+import { useEffect, useRef, useState } from 'react';
 
 interface SelectableTextProps {
   text: string;
@@ -7,61 +6,64 @@ interface SelectableTextProps {
   textClassName?: string;
 }
 
-interface SelectionRange {
-  start: number;
-  end: number;
-}
-
-function cleanToken(token: string) {
-  return token.replace(/[^\w'-]/g, '');
+interface BubbleState {
+  text: string;
+  x: number;
+  y: number;
 }
 
 export function SelectableText({ text, onDefine, textClassName }: SelectableTextProps) {
-  const tokens = useMemo(() => text.split(/\s+/).filter(Boolean), [text]);
-  const [selection, setSelection] = useState<SelectionRange | null>(null);
+  const [bubble, setBubble] = useState<BubbleState | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  const selectedText = selection
-    ? tokens.slice(selection.start, selection.end + 1).map(cleanToken).join(' ')
-    : '';
+  function handlePointerUp(e: React.PointerEvent) {
+    if ((e.target as Element).closest('.define-bubble')) return;
 
-  function handleTokenClick(index: number) {
-    setSelection((currentSelection) => {
-      if (currentSelection && index >= currentSelection.start && index <= currentSelection.end) {
-        return null;
-      }
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || sel.rangeCount === 0 || !containerRef.current) {
+      setBubble(null);
+      return;
+    }
 
-      return currentSelection;
-    });
+    const selectedText = sel.toString().trim();
+    if (!selectedText) { setBubble(null); return; }
+
+    const range = sel.getRangeAt(0);
+    if (!containerRef.current.contains(range.commonAncestorContainer)) {
+      setBubble(null);
+      return;
+    }
+
+    const rect = range.getBoundingClientRect();
+    setBubble({ text: selectedText, x: rect.left + rect.width / 2, y: rect.top });
   }
 
+  useEffect(() => {
+    function handlePointerDown(e: PointerEvent) {
+      if ((e.target as Element).closest('.define-bubble')) return;
+      setBubble(null);
+    }
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, []);
+
   return (
-    <div>
-      <p className={textClassName}>
-        {tokens.map((token, index) => {
-          const display = cleanToken(token);
-          const selected = selection !== null && index >= selection.start && index <= selection.end;
-          return (
-            <span key={`${token}-${index}`}>
-              <button
-                type="button"
-                aria-label={display}
-                data-selected={selected ? 'true' : 'false'}
-                onClick={() => handleTokenClick(index)}
-                onDoubleClick={() => setSelection({ start: index, end: index })}
-              >
-                {token}
-              </button>{' '}
-            </span>
-          );
-        })}
-      </p>
-      {selection ? (
-        <HelpPopover
-          selectedText={selectedText}
-          onExpandLeft={() => setSelection((current) => current ? { ...current, start: Math.max(0, current.start - 1) } : current)}
-          onExpandRight={() => setSelection((current) => current ? { ...current, end: Math.min(tokens.length - 1, current.end + 1) } : current)}
-          onDefine={() => onDefine?.(selectedText)}
-        />
+    <div ref={containerRef} onPointerUp={handlePointerUp}>
+      <p className={textClassName}>{text}</p>
+      {bubble && onDefine ? (
+        <button
+          type="button"
+          className="define-bubble"
+          style={{ left: bubble.x, top: bubble.y }}
+          aria-label={`Define "${bubble.text}"`}
+          onClick={() => {
+            onDefine(bubble.text);
+            setBubble(null);
+            window.getSelection()?.removeAllRanges();
+          }}
+        >
+          ?
+        </button>
       ) : null}
     </div>
   );

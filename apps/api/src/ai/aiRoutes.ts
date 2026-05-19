@@ -28,6 +28,21 @@ const ExplainGapsSchema = z.object({
 const DefineVocabularySchema = z.object({
   term: z.string().min(1),
   contextText: z.string().min(1),
+  readingLevel: z.string().optional(),
+  provider: ProviderSchema
+});
+
+const GradeFrameSchema = z.object({
+  frame: z.string().min(1),
+  completion: z.string().min(1),
+  passageText: z.string().min(1),
+  provider: ProviderSchema
+});
+
+const GenerateSentenceFramesSchema = z.object({
+  text: z.string().min(1),
+  missed: z.array(z.string()).default([]),
+  studentTranscript: z.string().default(''),
   provider: ProviderSchema
 });
 
@@ -35,7 +50,9 @@ export interface AiTeachingServiceLike {
   simplifyText(input: { provider: AiProvider; text: string; readingLevel: ReadingLevel }): Promise<string>;
   explainContext(input: { provider: AiProvider; text: string }): Promise<string>;
   explainGaps(input: { provider: AiProvider; text: string; missed: string[]; attempt?: number }): Promise<string>;
-  defineVocabulary(input: { provider: AiProvider; term: string; contextText: string }): Promise<string>;
+  defineVocabulary(input: { provider: AiProvider; term: string; contextText: string; readingLevel?: string }): Promise<string>;
+  gradeFrameCompletion(input: { provider: AiProvider; frame: string; completion: string; passageText: string }): Promise<{ passed: boolean; feedback: string }>;
+  generateSentenceFrames(input: { provider: AiProvider; text: string; missed: string[]; studentTranscript: string }): Promise<string>;
   scoreParaphrase(input: { provider: AiProvider; referenceText: string; transcript: string; threshold: number }): Promise<ScoreResult>;
 }
 
@@ -179,6 +196,52 @@ export function createAiRouterRoutes(service: AiTeachingServiceLike = aiTeaching
       const parsed = DefineVocabularySchema.safeParse(req.body);
       if (parsed.success) {
         await sendAiFailure(res, { task: 'defining vocabulary', provider: parsed.data.provider, error });
+        return;
+      }
+      next(error);
+    }
+  });
+
+  router.post('/grade-frame', async (req, res, next) => {
+    try {
+      const parsed = GradeFrameSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: 'Invalid frame grading input' });
+        return;
+      }
+      const result = await service.gradeFrameCompletion(parsed.data);
+      res.json({ ...result, provider: parsed.data.provider });
+    } catch (error) {
+      const parsed = GradeFrameSchema.safeParse(req.body);
+      if (parsed.success) {
+        await sendAiFailure(res, { task: 'grading frame completion', provider: parsed.data.provider, error });
+        return;
+      }
+      next(error);
+    }
+  });
+
+  router.post('/generate-sentence-frames', async (req, res, next) => {
+    try {
+      const parsed = GenerateSentenceFramesSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: 'Invalid sentence frames input' });
+        return;
+      }
+
+      const raw = await service.generateSentenceFrames(parsed.data);
+      let frames: Array<{ frame: string; hint: string }> = [];
+      try {
+        const jsonMatch = raw.match(/\[[\s\S]*\]/);
+        frames = JSON.parse(jsonMatch ? jsonMatch[0] : raw) as Array<{ frame: string; hint: string }>;
+      } catch {
+        frames = [];
+      }
+      res.json({ frames, provider: parsed.data.provider });
+    } catch (error) {
+      const parsed = GenerateSentenceFramesSchema.safeParse(req.body);
+      if (parsed.success) {
+        await sendAiFailure(res, { task: 'generating sentence frames', provider: parsed.data.provider, error });
         return;
       }
       next(error);

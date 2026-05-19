@@ -49,6 +49,7 @@ function testApp(overrides: Partial<Parameters<typeof createMaterialRouter>[0]> 
     generateChunkSimplifications: async () => ({ id: 'chunk_1', simplifications: {} }),
     suggestReadingParts: async () => ({ readingPartCount: 2 }),
     saveContextExplanation: async () => undefined,
+    generateKeyTerms: async () => ({ id: 'chunk_1', keyTerms: [] }),
     submitParaphraseAttempt: async () => ({
       score: 91,
       passed: true,

@@ -54,6 +54,7 @@ model MaterialChunk {
   bestScore           Int?
   simplifications     String              @default("{}")
   contextExplanation  String?
+  keyTermsJson        String              @default("[]")
   material            Material            @relation(fields: [materialId], references: [id])
   attempts            ParaphraseAttempt[]
 

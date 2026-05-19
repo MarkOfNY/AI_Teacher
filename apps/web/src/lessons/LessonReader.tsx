@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.trim() || 'http://localhost:3001';
-import { ChevronLeft, ChevronRight, Lightbulb, Mic, Square, Volume2, X } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Lightbulb, Mic, Square, Volume2, X } from 'lucide-react';
 import type { MaterialChunk, ReadingLevel } from '@ai-teacher/shared';
 import { SelectableText } from './SelectableText';
+import { generateSentenceFrames, gradeFrameCompletion, type SentenceFrame } from '../api/aiClient';
 
 interface SpeechRecognitionResultLike {
   0: { transcript: string };
@@ -64,8 +65,9 @@ interface LessonReaderProps {
   onExplainContext?: (input: { chunkId: string; text: string }) => void;
   onExplainAgain?: (input: { chunkId: string; text: string }) => void;
   onReadingLevelChange?: (level: ReadingLevel) => void;
-  onDefineVocabulary?: (input: { chunkId: string; selectedText: string; contextText: string }) => void;
+  onDefineVocabulary?: (input: { chunkId: string; selectedText: string; contextText: string; readingLevel: ReadingLevel }) => void;
   onFirstAudioCached?: () => void;
+  materialId?: string;
 }
 
 function scoreTone(score: number, threshold: number) {
@@ -112,7 +114,8 @@ export function LessonReader({
   onExplainAgain,
   onReadingLevelChange,
   onDefineVocabulary,
-  onFirstAudioCached
+  onFirstAudioCached,
+  materialId
 }: LessonReaderProps) {
   const [readingLevel, setReadingLevel] = useState<ReadingLevel>('middleSchool');
   const [versionIndex, setVersionIndex] = useState<Record<string, number>>({});
@@ -121,10 +124,18 @@ export function LessonReader({
   const [dictationMessages, setDictationMessages] = useState<Record<string, string>>({});
   const [finalTranscript, setFinalTranscript] = useState('');
   const [openContextChunkId, setOpenContextChunkId] = useState<string | null>(null);
-  const [dismissedDefinitionTexts, setDismissedDefinitionTexts] = useState<Record<string, string>>({});
+  const [openDefinitionChunkId, setOpenDefinitionChunkId] = useState<string | null>(null);
   const [isChangingReadingLevel, setIsChangingReadingLevel] = useState(false);
   const [speakingChunkId, setSpeakingChunkId] = useState<string | null>(null);
   const [activeDictationChunkId, setActiveDictationChunkId] = useState<string | null>(null);
+  const [chunkScores, setChunkScores] = useState<Record<string, ParaphraseScore>>({});
+  const [openResultChunkId, setOpenResultChunkId] = useState<string | null>(null);
+  const [chunkSentenceFrames, setChunkSentenceFrames] = useState<Record<string, SentenceFrame[]>>({});
+  const [frameInputs, setFrameInputs] = useState<Record<string, string[]>>({});
+  const [frameGrades, setFrameGrades] = useState<Record<string, Array<boolean | null>>>({});
+  const [isLoadingFrames, setIsLoadingFrames] = useState<string | null>(null);
+  const [frameGrading, setFrameGrading] = useState<Record<string, boolean[]>>({});
+  const [openHintKey, setOpenHintKey] = useState<string | null>(null);
   const readingPartRefs = useRef<Record<string, HTMLElement | null>>({});
   const activeAudioRef = useRef<HTMLAudioElement | null>(null);
   const audioCacheRef = useRef<Map<string, string>>(new Map());
@@ -134,8 +145,25 @@ export function LessonReader({
   const contextPopoverRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const contextButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const definitionPopoverRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const hintPopoverRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const submittingChunkIdRef = useRef<string | null>(null);
+  const prevScoreRef = useRef<ParaphraseScore | null>(null);
   const onFirstAudioCachedRef = useRef(onFirstAudioCached);
+  const speakingChunkIdRef = useRef<string | null>(null);
   useEffect(() => { onFirstAudioCachedRef.current = onFirstAudioCached; });
+  useEffect(() => { speakingChunkIdRef.current = speakingChunkId; }, [speakingChunkId]);
+  useEffect(() => {
+    if (score && score !== prevScoreRef.current) {
+      prevScoreRef.current = score;
+      const chunkId = submittingChunkIdRef.current;
+      if (chunkId) {
+        setChunkScores((prev) => ({ ...prev, [chunkId]: score }));
+        setOpenResultChunkId(chunkId);
+        setTestChunkId(null);
+        submittingChunkIdRef.current = null;
+      }
+    }
+  }, [score]);
   const allChunksPassed = chunks.length > 0 && chunks.every((chunk) => isPassed(chunk, chunkMasteryThreshold));
   const currentReadingPartCount = readingPartCount ?? chunks.length;
   const wholeReaderProcessing = isReaderProcessing || isChangingReadingLevel;
@@ -150,6 +178,7 @@ export function LessonReader({
   useEffect(() => {
     if (!openContextChunkId) return undefined;
     const openChunkId = openContextChunkId;
+    const explainAudioKey = `${openChunkId}-explanation`;
 
     function handlePointerDown(event: MouseEvent) {
       const target = event.target as Node | null;
@@ -161,7 +190,14 @@ export function LessonReader({
     }
 
     document.addEventListener('mousedown', handlePointerDown);
-    return () => document.removeEventListener('mousedown', handlePointerDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      if (speakingChunkIdRef.current === explainAudioKey) {
+        activeAudioRef.current?.pause();
+        activeAudioRef.current = null;
+        setSpeakingChunkId(null);
+      }
+    };
   }, [openContextChunkId]);
 
   useEffect(() => () => {
@@ -210,33 +246,31 @@ export function LessonReader({
 
 
   useEffect(() => {
-    const openChunkIds = chunks
-      .map((chunk) => chunk.id)
-      .filter((chunkId) => definitionTexts[chunkId] && dismissedDefinitionTexts[chunkId] !== definitionTexts[chunkId]);
-    if (openChunkIds.length === 0) return undefined;
-
+    if (!openDefinitionChunkId) return undefined;
+    const openChunkId = openDefinitionChunkId;
     function handlePointerDown(event: MouseEvent) {
       const target = event.target as Node | null;
       if (!target) return;
-
-      const clickedInsideDefinition = openChunkIds.some((chunkId) => definitionPopoverRefs.current[chunkId]?.contains(target));
-      if (clickedInsideDefinition) return;
-
-      setDismissedDefinitionTexts((current) => {
-        const next = { ...current };
-        openChunkIds.forEach((chunkId) => {
-          const definitionText = definitionTexts[chunkId];
-          if (definitionText) {
-            next[chunkId] = definitionText;
-          }
-        });
-        return next;
-      });
+      if (definitionPopoverRefs.current[openChunkId]?.contains(target)) return;
+      setOpenDefinitionChunkId(null);
     }
-
     document.addEventListener('mousedown', handlePointerDown);
     return () => document.removeEventListener('mousedown', handlePointerDown);
-  }, [chunks, definitionTexts, dismissedDefinitionTexts]);
+  }, [openDefinitionChunkId]);
+
+  useEffect(() => {
+    if (!openHintKey) return undefined;
+    const key = openHintKey;
+    function handlePointerDown(event: MouseEvent) {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (hintPopoverRefs.current[key]?.contains(target)) return;
+      if ((target as Element).closest?.('.hint-icon-button')) return;
+      setOpenHintKey(null);
+    }
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, [openHintKey]);
 
   useEffect(() => {
     if (activeDictationChunkId && testChunkId !== activeDictationChunkId) {
@@ -254,6 +288,11 @@ export function LessonReader({
 
   function handleReadingLevelChange(nextLevel: ReadingLevel) {
     if (wholeReaderProcessing) return;
+    if (speakingChunkId) {
+      activeAudioRef.current?.pause();
+      activeAudioRef.current = null;
+      setSpeakingChunkId(null);
+    }
     setReadingLevel(nextLevel);
     setIsChangingReadingLevel(true);
     setVersionIndex({});
@@ -275,7 +314,29 @@ export function LessonReader({
 
   function handleReviewAgain(chunk: MaterialChunk) {
     setTestChunkId(null);
+    setOpenResultChunkId(null);
     readingPartRefs.current[chunk.id]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  async function loadFramesForChunk(chunk: MaterialChunk) {
+    setIsLoadingFrames(chunk.id);
+    try {
+      const response = await generateSentenceFrames({
+        text: chunk.text,
+        missed: [],
+        studentTranscript: '',
+        provider: 'qwen'
+      });
+      if (response.frames.length > 0) {
+        setChunkSentenceFrames((prev) => ({ ...prev, [chunk.id]: response.frames }));
+        setFrameInputs((prev) => ({ ...prev, [chunk.id]: response.frames.map(() => '') }));
+        setFrameGrades((prev) => ({ ...prev, [chunk.id]: response.frames.map(() => null) }));
+      }
+    } catch {
+      // frames are optional — summary panel will show as fallback
+    } finally {
+      setIsLoadingFrames(null);
+    }
   }
 
   const readTextAloud = useCallback(async (id: string, text: string) => {
@@ -545,18 +606,20 @@ export function LessonReader({
             const visibleText = chunkVersions.length > 0
               ? (chunkVersions[curVersionIdx] ?? chunk.text)
               : chunk.text;
-            const partScore = score && testing ? score.score : chunk.bestScore;
-            const tone = typeof partScore === 'number' ? scoreTone(partScore, chunkMasteryThreshold) : null;
+            const partScore: number | null = chunkScores[chunk.id]?.score ?? chunk.bestScore ?? null;
+            const tone = partScore !== null ? scoreTone(partScore, chunkMasteryThreshold) : null;
             const transcript = transcripts[chunk.id] ?? '';
             const readingControlsEnabled = !locked && !testing && !wholeReaderProcessing;
             const definitionText = definitionTexts[chunk.id];
-            const definitionVisible = Boolean(definitionText && dismissedDefinitionTexts[chunk.id] !== definitionText);
-            const isDefining = Boolean(
-              !definitionText
-              && isSupportLoading
-              && supportLoadingChunkId === chunk.id
-              && openContextChunkId !== chunk.id
-            );
+            const isDefinitionLoading = !definitionText && isSupportLoading && supportLoadingChunkId === chunk.id;
+            const chunkFrames = chunkSentenceFrames[chunk.id] ?? [];
+            const chunkInputs = frameInputs[chunk.id] ?? [];
+            const chunkGrades = frameGrades[chunk.id] ?? [];
+            const chunkGrading = frameGrading[chunk.id] ?? [];
+            const allFramesPassed = chunkFrames.length > 0
+              && chunkFrames.every((_, idx) => chunkGrades[idx] === true);
+            const showSummaryPanel = allFramesPassed
+              || (chunkFrames.length === 0 && isLoadingFrames !== chunk.id);
 
             return (
               <article
@@ -582,74 +645,7 @@ export function LessonReader({
                         {speakingChunkId === chunk.id ? <Square size={14} aria-hidden="true" /> : <Volume2 size={17} aria-hidden="true" />}
                       </button>
                     </div>
-                    <span className="part-state">{locked ? 'Locked' : isPassed(chunk, chunkMasteryThreshold) ? 'Passed' : 'Ready'}</span>
                   </div>
-                  <div className="part-actions">
-                    {tone ? (
-                      <span className="score-badge">
-                        <span aria-label={tone.label} className={tone.className}>{tone.symbol}</span>
-                        {partScore}%
-                      </span>
-                    ) : null}
-                    <button
-                      ref={(element) => {
-                        contextButtonRefs.current[chunk.id] = element;
-                      }}
-                      type="button"
-                      className="explain-part-button"
-                      aria-label={`Explain Reading Part ${chunk.index + 1}`}
-                      aria-expanded={openContextChunkId === chunk.id}
-                      disabled={!readingControlsEnabled}
-                      onClick={() => handleContextClick(chunk)}
-                    >
-                      <Lightbulb size={16} aria-hidden="true" />
-                      <span>Explain</span>
-                    </button>
-                  </div>
-                </div>
-
-                <div className="reading-part-body">
-                  {isDefining ? (
-                    <div role="status" aria-label={`Defining word in Reading Part ${chunk.index + 1}`} className="definition-popover definition-popover-loading">
-                      <span className="loading-dot" aria-hidden="true" />
-                      <span>
-                        <strong>Defining...</strong>
-                        Looking up this word in the context of the reading part.
-                      </span>
-                    </div>
-                  ) : null}
-                  {definitionVisible ? (
-                    <div
-                      ref={(element) => {
-                        definitionPopoverRefs.current[chunk.id] = element;
-                      }}
-                      role="dialog"
-                      aria-label={`Definition for Reading Part ${chunk.index + 1}`}
-                      className="definition-popover"
-                    >
-                      <div className="definition-popover-header">
-                        <strong>Definition</strong>
-                        <button
-                          type="button"
-                          className="icon-button"
-                          aria-label={`Close definition for Reading Part ${chunk.index + 1}`}
-                          onClick={() => setDismissedDefinitionTexts((current) => ({ ...current, [chunk.id]: definitionText ?? '' }))}
-                        >
-                          <X size={16} aria-hidden="true" />
-                        </button>
-                      </div>
-                      <p>{definitionText}</p>
-                    </div>
-                  ) : null}
-                  <SelectableText
-                    text={visibleText}
-                    textClassName={testing ? 'blurred-reading-text' : undefined}
-                    onDefine={(selectedText) => onDefineVocabulary?.({
-                      chunkId: chunk.id,
-                      selectedText,
-                      contextText: chunk.text
-                    })}
-                  />
                   {chunkVersions.length > 1 ? (
                     <div className="version-nav" aria-label={`Version navigation for Reading Part ${chunk.index + 1}`}>
                       <button
@@ -687,12 +683,91 @@ export function LessonReader({
                       </button>
                     </div>
                   ) : null}
+                  <div className="part-actions">
+                    {tone ? (
+                      chunkScores[chunk.id] ? (
+                        <button
+                          type="button"
+                          className="score-badge score-badge-toggle"
+                          aria-expanded={openResultChunkId === chunk.id}
+                          aria-controls={`result-panel-${chunk.id}`}
+                          aria-label={`${partScore}% — ${tone.label}. ${openResultChunkId === chunk.id ? 'Hide' : 'Show'} feedback`}
+                          onClick={() => setOpenResultChunkId((prev) => prev === chunk.id ? null : chunk.id)}
+                        >
+                          <span aria-hidden="true" className={tone.className}>{tone.symbol}</span>
+                          {partScore}%
+                          {openResultChunkId === chunk.id
+                            ? <ChevronUp size={12} aria-hidden="true" />
+                            : <ChevronDown size={12} aria-hidden="true" />}
+                        </button>
+                      ) : (
+                        <span className="score-badge">
+                          <span aria-label={tone.label} className={tone.className}>{tone.symbol}</span>
+                          {partScore}%
+                        </span>
+                      )
+                    ) : null}
+                    <button
+                      ref={(element) => {
+                        contextButtonRefs.current[chunk.id] = element;
+                      }}
+                      type="button"
+                      className="explain-part-button"
+                      aria-label={`Explain Reading Part ${chunk.index + 1}`}
+                      aria-expanded={openContextChunkId === chunk.id}
+                      disabled={!readingControlsEnabled}
+                      onClick={() => handleContextClick(chunk)}
+                    >
+                      <Lightbulb size={16} aria-hidden="true" />
+                      <span>Explain</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="reading-part-body">
+                  {openDefinitionChunkId === chunk.id ? (
+                    <div
+                      ref={(element) => { definitionPopoverRefs.current[chunk.id] = element; }}
+                      role="dialog"
+                      aria-label={`Definition for Reading Part ${chunk.index + 1}`}
+                      className="definition-popover"
+                    >
+                      <div className="definition-popover-header">
+                        <strong>Definition</strong>
+                        <button
+                          type="button"
+                          className="icon-button"
+                          aria-label={`Close definition for Reading Part ${chunk.index + 1}`}
+                          onClick={() => setOpenDefinitionChunkId(null)}
+                        >
+                          <X size={16} aria-hidden="true" />
+                        </button>
+                      </div>
+                      {isDefinitionLoading ? (
+                        <p className="context-loading" role="status">
+                          <span className="loading-dot" aria-hidden="true" />
+                          Looking up this word in context...
+                        </p>
+                      ) : (
+                        <p>{definitionText}</p>
+                      )}
+                    </div>
+                  ) : null}
+                  <SelectableText
+                    text={visibleText}
+                    textClassName={testing ? 'blurred-reading-text' : undefined}
+                    onDefine={(selectedText) => {
+                      setOpenDefinitionChunkId(chunk.id);
+                      onDefineVocabulary?.({ chunkId: chunk.id, selectedText, contextText: chunk.text, readingLevel });
+                    }}
+                  />
                 </div>
 
                 {openContextChunkId === chunk.id ? (() => {
                   const contextText = contextTexts[chunk.id];
                   const explainAudioKey = `${chunk.id}-explanation`;
                   const isLoadingContext = supportLoadingChunkId === chunk.id && !contextText;
+                  const isReExplaining = Boolean(contextText && supportLoadingChunkId === chunk.id);
 
                   return (
                     <div
@@ -739,12 +814,20 @@ export function LessonReader({
                           Getting context...
                         </p>
                       ) : (
-                        <p>{contextText ?? 'No context available yet.'}</p>
+                        <>
+                          <p>{contextText ?? 'No context available yet.'}</p>
+                          {isReExplaining ? (
+                            <p className="context-loading" role="status">
+                              <span className="loading-dot" aria-hidden="true" />
+                              Getting a fresh take...
+                            </p>
+                          ) : null}
+                        </>
                       )}
                       <button
                         type="button"
                         className="secondary-button compact-button"
-                        disabled={isLoadingContext}
+                        disabled={isLoadingContext || isReExplaining}
                         onClick={() => {
                           if (speakingChunkId === explainAudioKey) {
                             activeAudioRef.current?.pause();
@@ -767,7 +850,11 @@ export function LessonReader({
                     disabled={locked || wholeReaderProcessing}
                     onClick={() => {
                       setOpenContextChunkId(null);
+                      setOpenResultChunkId(null);
                       setTestChunkId(chunk.id);
+                      if (!chunkSentenceFrames[chunk.id]?.length && isLoadingFrames !== chunk.id) {
+                        void loadFramesForChunk(chunk);
+                      }
                     }}
                   >
                     Test Reading Part {chunk.index + 1}
@@ -776,50 +863,209 @@ export function LessonReader({
 
                 {testing ? (
                   <section aria-label={`Test Reading Part ${chunk.index + 1}`} className="inline-test-panel">
-                    <label className="field">
-                      <span>Your summary for Reading Part {chunk.index + 1}</span>
-                      <div className="summary-input-wrap">
-                        <textarea
-                          value={transcript}
-                          onChange={(event) => setTranscripts((current) => ({ ...current, [chunk.id]: event.target.value }))}
-                          placeholder="Type the idea in your own words."
-                        />
-                        <button
-                          type="button"
-                          className={activeDictationChunkId === chunk.id ? 'summary-mic-button summary-mic-button-active' : 'summary-mic-button'}
-                          aria-label={activeDictationChunkId === chunk.id ? `Stop recording for Reading Part ${chunk.index + 1}` : `Record summary for Reading Part ${chunk.index + 1}`}
-                          aria-pressed={activeDictationChunkId === chunk.id}
-                          onClick={() => toggleDictation(chunk)}
-                        >
-                          {activeDictationChunkId === chunk.id ? <Square size={14} aria-hidden="true" /> : <Mic size={18} aria-hidden="true" />}
-                        </button>
-                      </div>
-                    </label>
-                    <div className="practice-actions">
-                      <button type="button" className="secondary-button compact-button" onClick={() => handleReviewAgain(chunk)}>
-                        Review Again
-                      </button>
-                      <button
-                        type="button"
-                        className="primary-button"
-                        disabled={!transcript.trim() || isSubmitting}
-                        onClick={() => onSubmitParaphrase?.({ chunkId: chunk.id, transcript, referenceText: visibleText })}
-                      >
-                        Submit Test
-                      </button>
-                    </div>
-                    {dictationMessages[chunk.id] ? <p className="dictation-message" role="status">{dictationMessages[chunk.id]}</p> : null}
-                    {score ? (
-                      <div className="score-result">
-                        <strong>{score.score}%</strong>
-                        <p role="status" aria-label="Test result guidance" className={score.score >= chunkMasteryThreshold ? 'score-guidance score-guidance-pass' : 'score-guidance score-guidance-review'}>
-                          {scoreGuidance(score, chunkMasteryThreshold)}
-                        </p>
-                        <p>{score.feedback}</p>
-                      </div>
-                    ) : null}
+                    {isLoadingFrames === chunk.id ? (
+                      <p className="context-loading" role="status">
+                        <span className="loading-dot" aria-hidden="true" />
+                        Setting up your Guided Recap...
+                      </p>
+                    ) : (
+                      <>
+                        {chunkFrames.length > 0 ? (
+                          <div className="guided-recap-panel">
+                            <div className="guided-recap-header">
+                              <strong>Step 1 — Guided Recap</strong>
+                              <p className="guided-recap-intro">Complete each sentence to show what you understood. Tap <strong>?</strong> on any sentence if you need a hint.</p>
+                            </div>
+                            {chunkFrames.map((frame, i) => {
+                              const parts = frame.frame.split('___');
+                              const grade = chunkGrades[i] ?? null;
+                              const hintKey = `${chunk.id}-${i}`;
+                              return (
+                                <div key={i} className="sentence-frame">
+                                  <div className="frame-row">
+                                    <span className="frame-text">{parts[0]}</span>
+                                    <input
+                                      type="text"
+                                      className="frame-blank-input"
+                                      value={chunkInputs[i] ?? ''}
+                                      onChange={(event) => setFrameInputs((prev) => {
+                                        const arr = [...(prev[chunk.id] ?? chunkFrames.map(() => ''))];
+                                        arr[i] = event.target.value;
+                                        return { ...prev, [chunk.id]: arr };
+                                      })}
+                                      onBlur={(event) => {
+                                        const value = event.target.value.trim();
+                                        if (!value) return;
+                                        setFrameGrading((prev) => {
+                                          const arr = [...(prev[chunk.id] ?? chunkFrames.map(() => false))];
+                                          arr[i] = true;
+                                          return { ...prev, [chunk.id]: arr };
+                                        });
+                                        void gradeFrameCompletion({
+                                          frame: frame.frame,
+                                          completion: value,
+                                          passageText: chunk.text,
+                                          provider: 'qwen'
+                                        }).then((result) => {
+                                          setFrameGrades((prev) => {
+                                            const arr = [...(prev[chunk.id] ?? chunkFrames.map(() => null))];
+                                            arr[i] = result.passed;
+                                            return { ...prev, [chunk.id]: arr };
+                                          });
+                                        }).catch(() => {
+                                          setFrameGrades((prev) => {
+                                            const arr = [...(prev[chunk.id] ?? chunkFrames.map(() => null))];
+                                            arr[i] = false;
+                                            return { ...prev, [chunk.id]: arr };
+                                          });
+                                        }).finally(() => {
+                                          setFrameGrading((prev) => {
+                                            const arr = [...(prev[chunk.id] ?? chunkFrames.map(() => false))];
+                                            arr[i] = false;
+                                            return { ...prev, [chunk.id]: arr };
+                                          });
+                                        });
+                                      }}
+                                    />
+                                    {parts[1] ? <span className="frame-text">{parts[1]}</span> : null}
+                                    <button
+                                      type="button"
+                                      className="hint-icon-button"
+                                      aria-label={`Hint for sentence ${i + 1}`}
+                                      onClick={() => setOpenHintKey((prev) => (prev === hintKey ? null : hintKey))}
+                                    >
+                                      ?
+                                    </button>
+                                    {chunkGrading[i] ? (
+                                      <span className="frame-grade" aria-label="Grading..."><span className="loading-dot" aria-hidden="true" /></span>
+                                    ) : grade === true ? (
+                                      <span className="frame-grade frame-grade-pass" aria-label="Correct">✓</span>
+                                    ) : grade === false ? (
+                                      <span className="frame-grade frame-grade-fail" aria-label="Needs more detail">✗</span>
+                                    ) : null}
+                                  </div>
+                                  {openHintKey === hintKey ? (
+                                    <div
+                                      ref={(el) => { hintPopoverRefs.current[hintKey] = el; }}
+                                      role="dialog"
+                                      aria-label={`Hint for sentence ${i + 1}`}
+                                      className="hint-popover"
+                                    >
+                                      <div className="definition-popover-header">
+                                        <strong>Hint</strong>
+                                        <button
+                                          type="button"
+                                          className="icon-button"
+                                          aria-label="Close hint"
+                                          onClick={() => setOpenHintKey(null)}
+                                        >
+                                          <X size={16} aria-hidden="true" />
+                                        </button>
+                                      </div>
+                                      <p>{frame.hint}</p>
+                                    </div>
+                                  ) : null}
+                                </div>
+                              );
+                            })}
+                            <div className="practice-actions">
+                              <button type="button" className="secondary-button compact-button" onClick={() => handleReviewAgain(chunk)}>
+                                Review Again
+                              </button>
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {showSummaryPanel ? (
+                          <div className="own-summary-panel">
+                            <div className="own-summary-header">
+                              <strong>{chunkFrames.length > 0 ? 'Step 2 — Write Your Summary' : 'Write Your Summary'}</strong>
+                              <p className="own-summary-intro">
+                                {chunkFrames.length > 0
+                                  ? 'Nice work! Now put it all together in your own words.'
+                                  : 'Summarize this reading part in your own words.'}
+                              </p>
+                            </div>
+                            <label className="field">
+                              <span>Your summary for Reading Part {chunk.index + 1}</span>
+                              <div className="summary-input-wrap">
+                                <textarea
+                                  value={transcript}
+                                  onChange={(event) => setTranscripts((current) => ({ ...current, [chunk.id]: event.target.value }))}
+                                  placeholder="Write the main idea of this reading part in your own words."
+                                />
+                                <button
+                                  type="button"
+                                  className={activeDictationChunkId === chunk.id ? 'summary-mic-button summary-mic-button-active' : 'summary-mic-button'}
+                                  aria-label={activeDictationChunkId === chunk.id ? `Stop recording for Reading Part ${chunk.index + 1}` : `Record summary for Reading Part ${chunk.index + 1}`}
+                                  aria-pressed={activeDictationChunkId === chunk.id}
+                                  onClick={() => toggleDictation(chunk)}
+                                >
+                                  {activeDictationChunkId === chunk.id ? <Square size={14} aria-hidden="true" /> : <Mic size={18} aria-hidden="true" />}
+                                </button>
+                              </div>
+                            </label>
+                            <div className="practice-actions">
+                              {chunkFrames.length === 0 ? (
+                                <button type="button" className="secondary-button compact-button" onClick={() => handleReviewAgain(chunk)}>
+                                  Review Again
+                                </button>
+                              ) : null}
+                              <button
+                                type="button"
+                                className="primary-button"
+                                disabled={!transcript.trim() || isSubmitting}
+                                onClick={() => {
+                                  submittingChunkIdRef.current = chunk.id;
+                                  onSubmitParaphrase?.({ chunkId: chunk.id, transcript, referenceText: visibleText });
+                                }}
+                              >
+                                Submit Test
+                              </button>
+                            </div>
+                            {dictationMessages[chunk.id] ? <p className="dictation-message" role="status">{dictationMessages[chunk.id]}</p> : null}
+                          </div>
+                        ) : null}
+                      </>
+                    )}
                   </section>
                 ) : null}
+
+                {openResultChunkId === chunk.id && (() => {
+                  const result = chunkScores[chunk.id];
+                  if (!result) return null;
+                  return (
+                    <div id={`result-panel-${chunk.id}`} className="score-result-panel">
+                      <p className={result.passed ? 'score-guidance score-guidance-pass' : 'score-guidance score-guidance-review'}>
+                        {scoreGuidance(result, chunkMasteryThreshold)}
+                      </p>
+                      <p>{result.feedback}</p>
+                      <div className="practice-actions">
+                        <button type="button" className="secondary-button compact-button" onClick={() => handleReviewAgain(chunk)}>
+                          Review Again
+                        </button>
+                        {result.passed ? (
+                          <button type="button" className="secondary-button compact-button" onClick={() => setOpenResultChunkId(null)}>
+                            Close
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="primary-button compact-button"
+                            onClick={() => {
+                              setChunkScores((prev) => { const next = { ...prev }; delete next[chunk.id]; return next; });
+                              setOpenResultChunkId(null);
+                              setTranscripts((current) => ({ ...current, [chunk.id]: '' }));
+                              setTestChunkId(chunk.id);
+                            }}
+                          >
+                            Try Again
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
               </article>
             );
           })}

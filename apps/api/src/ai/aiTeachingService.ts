@@ -24,7 +24,7 @@ export const aiTeachingService = {
     return router.explainGaps(input);
   },
 
-  defineVocabulary(input: { provider: AiProvider; term: string; contextText: string }) {
+  defineVocabulary(input: { provider: AiProvider; term: string; contextText: string; readingLevel?: string }) {
     return router.defineVocabulary(input);
   },
 
@@ -42,5 +42,17 @@ export const aiTeachingService = {
 
   structureTextAsHtml(input: { provider: AiProvider; text: string }) {
     return router.structureTextAsHtml(input);
+  },
+
+  extractKeyTerms(input: { provider: AiProvider; text: string }) {
+    return router.extractKeyTerms(input);
+  },
+
+  gradeFrameCompletion(input: { provider: AiProvider; frame: string; completion: string; passageText: string }) {
+    return router.gradeFrameCompletion(input);
+  },
+
+  generateSentenceFrames(input: { provider: AiProvider; text: string; missed: string[]; studentTranscript: string }) {
+    return router.generateSentenceFrames(input);
   }
 };

@@ -12,7 +12,10 @@ interface ProviderClient {
   simplifyText?(input: { text: string; readingLevel: ReadingLevel; hint?: string; temperature?: number }): Promise<string>;
   explainContext?(input: { text: string }): Promise<string>;
   explainGaps?(input: { text: string; missed: string[]; attempt?: number }): Promise<string>;
-  defineVocabulary?(input: { term: string; contextText: string }): Promise<string>;
+  defineVocabulary?(input: { term: string; contextText: string; readingLevel?: string }): Promise<string>;
+  extractKeyTerms?(input: { text: string }): Promise<string>;
+  gradeFrameCompletion?(input: { frame: string; completion: string; passageText: string }): Promise<{ passed: boolean; feedback: string }>;
+  generateSentenceFrames?(input: { text: string; missed: string[]; studentTranscript: string }): Promise<string>;
   suggestReadingPartCount?(input: { text: string }): Promise<number>;
   scoreParaphrase?(input: { referenceText: string; transcript: string; threshold: number }): Promise<ScoreResult>;
   extractTextFromImage?(input: { imageBase64: string; mimeType: string }): Promise<string>;
@@ -44,10 +47,10 @@ export function createAiRouter(clients: { qwen: ProviderClient; deepseek: Provid
       if (!client.explainGaps) throw new Error(`Provider ${input.provider} does not support explainGaps`);
       return client.explainGaps({ text: input.text, missed: input.missed, attempt: input.attempt });
     },
-    async defineVocabulary(input: { provider: AiProvider; term: string; contextText: string }) {
+    async defineVocabulary(input: { provider: AiProvider; term: string; contextText: string; readingLevel?: string }) {
       const client = clientFor(input.provider, 'defineVocabulary');
       if (!client.defineVocabulary) throw new Error(`Provider ${input.provider} does not support defineVocabulary`);
-      return client.defineVocabulary({ term: input.term, contextText: input.contextText });
+      return client.defineVocabulary({ term: input.term, contextText: input.contextText, readingLevel: input.readingLevel });
     },
     async suggestReadingPartCount(input: { provider: AiProvider; text: string }) {
       const client = clientFor(input.provider, 'suggestReadingPartCount');
@@ -72,6 +75,21 @@ export function createAiRouter(clients: { qwen: ProviderClient; deepseek: Provid
       const client = clientFor(input.provider, 'structureTextAsHtml');
       if (!client.structureTextAsHtml) throw new Error(`Provider ${input.provider} does not support structureTextAsHtml`);
       return client.structureTextAsHtml({ text: input.text });
+    },
+    async extractKeyTerms(input: { provider: AiProvider; text: string }) {
+      const client = clientFor(input.provider, 'extractKeyTerms');
+      if (!client.extractKeyTerms) throw new Error(`Provider ${input.provider} does not support extractKeyTerms`);
+      return client.extractKeyTerms({ text: input.text });
+    },
+    async gradeFrameCompletion(input: { provider: AiProvider; frame: string; completion: string; passageText: string }) {
+      const client = clientFor(input.provider, 'gradeFrameCompletion');
+      if (!client.gradeFrameCompletion) throw new Error(`Provider ${input.provider} does not support gradeFrameCompletion`);
+      return client.gradeFrameCompletion({ frame: input.frame, completion: input.completion, passageText: input.passageText });
+    },
+    async generateSentenceFrames(input: { provider: AiProvider; text: string; missed: string[]; studentTranscript: string }) {
+      const client = clientFor(input.provider, 'generateSentenceFrames');
+      if (!client.generateSentenceFrames) throw new Error(`Provider ${input.provider} does not support generateSentenceFrames`);
+      return client.generateSentenceFrames({ text: input.text, missed: input.missed, studentTranscript: input.studentTranscript });
     }
   };
 }

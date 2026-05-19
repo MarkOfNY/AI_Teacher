@@ -103,8 +103,33 @@ export function buildProviderClient(config: ProviderConfig, apiKey: string) {
     async structureTextAsHtml(input: { text: string }) {
       return send(`Convert this plain text extracted from a PDF into clean, structured HTML. Infer structure from patterns: short standalone lines are headings (use <h2> or <h3>), prose paragraphs become <p>, lines starting with -, *, or • become <ul><li> items, numbered lines become <ol><li> items. Preserve all content exactly — do not summarize or omit anything. Return only the HTML — no DOCTYPE, no <html>/<body> tags, no commentary.\n\n${input.text}`, 0.1);
     },
-    async defineVocabulary(input: { term: string; contextText: string }) {
-      return send(`Define the word or phrase "${input.term}" for a student. Use the surrounding text to choose the right meaning. Keep the answer short and concrete.\n\nSurrounding text:\n${input.contextText}`);
+    async defineVocabulary(input: { term: string; contextText: string; readingLevel?: string }) {
+      const levelNote = input.readingLevel === 'verySimple'
+        ? 'Use very simple words, as if explaining to a young child.'
+        : input.readingLevel === 'simple'
+        ? 'Use simple, everyday language appropriate for an elementary student.'
+        : input.readingLevel === 'middleSchool'
+        ? 'Use clear language appropriate for a middle school student.'
+        : 'Use clear, accessible language.';
+      return send(`Define the word or phrase "${input.term}" for a student. ${levelNote} Use the surrounding text to choose the right meaning. Keep the answer short and concrete — one or two sentences.\n\nSurrounding text:\n${input.contextText}`);
+    },
+    async extractKeyTerms(input: { text: string }) {
+      return send(`Identify 3 to 5 phrases or short clauses from this text that carry the most important ideas — the core claims, facts, or arguments a student must remember. These should be exact or near-exact phrases from the text itself, not vocabulary explanations. Prefer meaningful phrases over single words. Return only valid JSON — an array of objects with "term" (the exact phrase from the text) and "definition" (one sentence on why this idea matters). No commentary outside the JSON.\n\nExample: [{"term":"life, liberty and the pursuit of happiness","definition":"The three rights the Declaration says all people are born with."}]\n\nText:\n${input.text}`, 0.2);
+    },
+    async gradeFrameCompletion(input: { frame: string; completion: string; passageText: string }) {
+      const fullSentence = input.frame.replace('___', input.completion);
+      const content = await send(`A student completed a sentence frame about a reading passage. Grade their answer as correct or incorrect based on whether the completion accurately reflects the passage. Accept synonyms, paraphrasing, and reasonable alternatives — only mark incorrect if the answer is factually wrong, irrelevant, or too vague to demonstrate understanding. Return only valid JSON: {"passed":boolean,"feedback":"one short sentence for the student explaining what is wrong, or empty string if correct"}.\n\nPassage:\n${input.passageText}\n\nCompleted sentence:\n${fullSentence}`, 0.1);
+      try {
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : content) as { passed?: boolean; feedback?: string };
+        return { passed: Boolean(parsed.passed), feedback: typeof parsed.feedback === 'string' ? parsed.feedback : '' };
+      } catch {
+        return { passed: false, feedback: '' };
+      }
+    },
+    async generateSentenceFrames(input: { text: string; missed: string[]; studentTranscript: string }) {
+      const missedList = input.missed.length > 0 ? input.missed.join(', ') : 'key ideas from the text';
+      return send(`A student is struggling to summarize a reading passage. Create 2-3 sentence frames that guide them toward the ideas they missed. Each frame must start with useful words but leave a blank ("___") for the student to complete, targeting the specific missed concepts. Keep the language simple. Return only valid JSON — an array of objects with "frame" (the sentence with blank) and "hint" (a specific memory cue that helps the student recall the answer — describe WHAT the answer is using background knowledge or context clues, never reference where it appears in the text; never say "mentioned in the text", "at the beginning", "in the passage", "in the second sentence", or any phrase pointing to text location; instead give a conceptual clue like "A Founding Father from Virginia who later became the third U.S. president" or "The same year as the very first Fourth of July celebration"). No commentary outside the JSON.\n\nExample: [{"frame":"The colonists declared independence in ___","hint":"The same year as the very first Fourth of July celebration"},{"frame":"The document was mainly written by ___","hint":"A Founding Father from Virginia who later became the third U.S. president"}]\n\nPassage:\n${input.text}\n\nIdeas the student missed: ${missedList}\n\nStudent's attempt:\n${input.studentTranscript}`, 0.3);
     },
     async suggestReadingPartCount(input: { text: string }) {
       const content = await send(`Suggest the best number of coherent reading parts for this lesson text. Keep sentences together and avoid tiny title-only or fragment-only chunks. Aim for parts a student can read and summarize one at a time. Return only one integer.\n\nText:\n${input.text}`);

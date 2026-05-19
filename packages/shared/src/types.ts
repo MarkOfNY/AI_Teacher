@@ -16,6 +16,11 @@ export interface StudentProfile {
   aiRoutingPreferences: AiRoutingPreferences;
 }
 
+export interface KeyTerm {
+  term: string;
+  definition: string;
+}
+
 export interface MaterialChunk {
   id: string;
   materialId: string;
@@ -25,6 +30,7 @@ export interface MaterialChunk {
   bestScore: number | null;
   simplifications?: Partial<Record<ReadingLevel, string[]>>;
   contextExplanation?: string | null;
+  keyTerms?: KeyTerm[];
 }
 
 export interface ScoreRubric {

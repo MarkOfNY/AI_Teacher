@@ -156,7 +156,8 @@ export const materialService = {
       chunks: raw.chunks.map((chunk) => ({
         ...chunk,
         simplifications: JSON.parse(chunk.simplifications || '{}') as Partial<Record<ReadingLevel, string[]>>,
-        contextExplanation: chunk.contextExplanation ?? null
+        contextExplanation: chunk.contextExplanation ?? null,
+        keyTerms: JSON.parse(chunk.keyTermsJson || '[]') as Array<{ term: string; definition: string }>
       }))
     };
   },
@@ -388,6 +389,35 @@ export const materialService = {
       where: { id: input.chunkId, materialId: input.materialId },
       data: { contextExplanation: input.explanation }
     });
+  },
+
+  async generateKeyTerms(input: { chunkId: string; materialId: string; text?: string; provider?: AiProvider; force?: boolean }) {
+    const chunk = await prisma.materialChunk.findFirst({
+      where: { id: input.chunkId, materialId: input.materialId }
+    });
+    if (!chunk) throw new Error('Chunk not found');
+
+    const textToUse = input.text ?? chunk.text;
+    const existing = JSON.parse(chunk.keyTermsJson || '[]') as Array<{ term: string; definition: string }>;
+    if (existing.length > 0 && !input.force && !input.text) return { id: chunk.id, keyTerms: existing };
+
+    const provider = input.provider ?? 'qwen';
+    const raw = await aiTeachingService.extractKeyTerms({ provider, text: textToUse });
+
+    let keyTerms: Array<{ term: string; definition: string }> = [];
+    try {
+      const jsonMatch = raw.match(/\[[\s\S]*\]/);
+      keyTerms = JSON.parse(jsonMatch ? jsonMatch[0] : raw) as Array<{ term: string; definition: string }>;
+    } catch {
+      keyTerms = [];
+    }
+
+    await prisma.materialChunk.updateMany({
+      where: { id: input.chunkId, materialId: input.materialId },
+      data: { keyTermsJson: JSON.stringify(keyTerms) }
+    });
+
+    return { id: chunk.id, keyTerms };
   },
 
   async suggestReadingParts(materialId: string, provider: AiProvider = 'qwen') {

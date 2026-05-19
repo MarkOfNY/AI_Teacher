@@ -240,6 +240,7 @@ export interface MaterialServiceLike {
   generateSimplifications(input: z.infer<typeof GenerateSimplificationsSchema> & { materialId: string }): Promise<unknown>;
   generateChunkSimplifications(input: z.infer<typeof GenerateSimplificationsSchema> & { materialId: string; chunkId: string }): Promise<unknown>;
   saveContextExplanation(input: { chunkId: string; materialId: string; explanation: string }): Promise<void>;
+  generateKeyTerms(input: { chunkId: string; materialId: string; text?: string; provider?: AiProvider; force?: boolean }): Promise<unknown>;
   submitParaphraseAttempt(input: { materialId: string } & z.infer<typeof SubmitAttemptSchema>): Promise<unknown>;
 }
 
@@ -440,6 +441,29 @@ export function createMaterialRouter(service: MaterialServiceLike = materialServ
         explanation: parsed.data.explanation
       });
       res.status(204).send();
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post('/:materialId/chunks/:chunkId/key-terms', async (req, res, next) => {
+    try {
+      const parsed = z.object({
+        provider: z.enum(['qwen', 'deepseek', 'openai']).default('qwen'),
+        force: z.boolean().optional(),
+        text: z.string().min(1).optional()
+      }).safeParse(req.body ?? {});
+      const provider = parsed.success ? parsed.data.provider : 'qwen';
+      const force = parsed.success ? parsed.data.force : false;
+      const text = parsed.success ? parsed.data.text : undefined;
+      const result = await service.generateKeyTerms({
+        materialId: req.params.materialId,
+        chunkId: req.params.chunkId,
+        provider,
+        force,
+        text
+      });
+      res.json(result);
     } catch (error) {
       next(error);
     }
